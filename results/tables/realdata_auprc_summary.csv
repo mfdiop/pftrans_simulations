@@ -1,0 +1,7 @@
+Method,Analysis,N_pairs,N_positives,Random_baseline,Real_AUPRC,Real_CI_lo,Real_CI_hi,Lift_over_random,Sim_mean_AUPRC,Sim_CI_lo,Sim_CI_hi,Below_sim_mean,Within_sim_CI
+IBD,All pairs (same HH),12720,158,0.0124,0.029,0.0195,0.0459,2.34,0.7,0.65,0.75,True,False
+IBD,Monoclonal pairs (same HH),9316,97,0.0104,0.0196,0.0129,0.0388,1.89,0.7,0.65,0.75,True,False
+IBS,All pairs (same HH),12720,158,0.0124,0.0297,0.0203,0.0458,2.39,0.65,0.6,0.7,True,False
+IBS,Monoclonal pairs (same HH),9316,97,0.0104,0.0204,0.0136,0.0362,1.95,0.65,0.6,0.7,True,False
+Phylo,All pairs (same HH),12720,158,0.0124,0.0221,0.0149,0.0347,1.78,0.63,0.58,0.68,True,False
+Phylo,Monoclonal pairs (same HH),9316,97,0.0104,0.0158,0.0101,0.0298,1.52,0.63,0.58,0.68,True,False

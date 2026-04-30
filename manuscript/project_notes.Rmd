@@ -1,0 +1,1154 @@
+---
+title: "Recommended benchmarking pipeline"
+author: "Mouhamadou Fadel DIOP"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+> I estimated shared IBD segments between individuals and then aggregate them over the length of the chromosome to get the IBD estimate. This value is used as a proxy to true genetic relatedness and will be compared to the inferred metrics. Does it make sense to compare this IBD value to IBS or phylogenetic panmictic distance since they are calculated differently?
+
+Short answer: **Yes — you can compare aggregated IBD (total shared IBD length) to IBS or phylogenetic distances, but you must do it carefully** because they measure relatedness on different principles, timescales, and units. With the right transformations, statistics and performance metrics you can get meaningful comparisons; without those, comparisons can be misleading.
+
+Below I’ll explain the differences, the practical consequences for benchmarking, and a concrete, practical checklist and recommended analyses you should run so your comparisons are rigorous and interpretable.
+
+---
+
+# 1) What each quantity *actually* measures
+
+* **IBD (total shared length)** — proportion or length of genome inherited from recent common ancestors without recombination breakpoints. Sensitive to *very recent* common ancestry (few generations). Units: basepairs (or proportion of genome). Good for identifying recent transmission-like links.
+
+* **IBS (identity-by-state)** — fraction of alleles that are identical between two samples regardless of origin. Includes matches due to recent common ancestry **and** chance matches from allele frequencies. Units: proportion of sites identical. Sensitive to allele frequency spectrum and genotype error.
+
+* **Phylogenetic (patristic) distance** — sum of branch lengths on a reconstructed tree between two sampled genomes (often measured in substitutions per site). Represents accumulated genetic divergence (coalescent time × mutation rate). Sensitive to sampling times, mutation rate, and model of tree inference. Units: substitutions/site (or branch-length units).
+
+---
+
+# 2) Why direct raw comparisons are problematic
+
+* **Different units & scales.** IBD is length (bp), IBS is proportion of identical sites, phylogenetic distance is substitutions/site. You can’t compare magnitudes directly.
+* **Different timescales.** IBD targets *recent* shared ancestry; phylogenetic distance captures *cumulative* divergence (longer timescale); IBS mixes both.
+* **Different sensitivities.** IBS is biased by allele frequencies and population structure; phylogenetic inference is affected by tree estimation error, recombination, and sampling times; IBD detection needs phased data or high-quality haplotypes and suffers with low SNP density/recombination.
+* **Within-host diversity & mixed infections.** For pathogens (malaria, trachoma) multiple genotypes within a host blur signals: IBD between two consensus genomes is only a partial picture of transmission.
+
+---
+
+# 3) How to make comparisons meaningful — practical approaches
+
+### A — Convert to **comparable similarity** measures
+
+* **IBD → proportion shared**: `IBD_prop = total_IBD_length / genome_length` (range 0–1). This is intuitive: 0 = no IBD, 1 = identical across genome.
+* **IBS → similarity**: `IBS_prop = (# identical alleles) / (# compared sites)` (range 0–1).
+* **Phylogenetic distance → similarity**: transform distance to similarity, e.g.
+
+  * `phylo_sim = exp(-alpha * patristic_distance)` (alpha chosen so values are interpretable), or
+  * `phylo_sim = 1 / (1 + patristic_distance)`, or
+  * convert to *coalescent time* if branch lengths are in substitutions/site and you know mutation rate: `t_est = patristic_distance / (2 * mu)` (approx), then convert to a similarity score `sim = 1/(1+t_est)` or map to expected fraction genome shared by recent coalescence.
+* **Recommendation:** use `IBD_prop` and `IBS_prop` directly; for phylogenetic distances either use rank-based comparisons or transform into a bounded similarity first.
+
+### B — Use **rank-based / relative** statistics
+
+* **Spearman’s rho** (rank correlation) between measures is robust: it answers whether pairs considered “most related” by IBD are also most related by IBS/phylo.
+* **Mantel test** (matrix correlation) with permutation for significance.
+
+### C — Use **binary evaluation for transmission links**
+
+* Convert the ground truth (pedigree-derived transmission edges) to a binary label for each pair: 1 = direct transmission (or within k generations), 0 = otherwise.
+* Then evaluate how well each metric predicts true edges using classification metrics:
+
+  * ROC AUC (if link prevalence not tiny),
+  * Precision-Recall AUPRC (better when positive links are rare),
+  * Precision@k (are the top k predicted links enriched for true transmissions)
+  * Recall at fixed precision (or vice versa).
+* For this, you must choose a decision rule — e.g., threshold on `IBD_prop` or `phylo_sim` or use the metric as a score in a classifier.
+
+### D — Account for **confounders**
+
+* **Sample time differences:** older samples tend to be more diverged — include time difference as covariate.
+* **Population structure:** can elevate IBS similarity even when not recently transmitted — control for village/region.
+* **SNP density & phasing quality:** low density decreases IBD detection sensitivity; flag scenarios and report sensitivity analyses.
+
+### E — Use **regression / predictive modeling** to combine metrics
+
+* Fit logistic regression or random forest to predict true transmission edge using:
+
+  * `IBD_prop`, `IBS_prop`, `patristic_distance`, `sampling_time_diff`, `geographic_distance`, etc.
+* Evaluate feature importance: this tells you which genetic metric contributes most to predicting transmission.
+
+---
+
+# 4) Recommended benchmarking pipeline (concrete steps)
+
+1. **Compute measures**
+
+   * IBD: use tskit / hap-ibd / GERMLINE to get segments → sum lengths → `IBD_prop`.
+   * IBS: pairwise Hamming proportion from VCF → `IBS_prop`.
+   * Phylo: infer tree (or use true tree from tskit) → compute patristic distances.
+
+2. **Transform**
+
+   * Normalize IBD to `IBD_prop`.
+   * If using phylo distances, either use rank tests or convert to `phylo_sim` via `exp(-alpha*d)`.
+
+3. **Exploratory plots**
+
+   * Scatter plots: `IBD_prop` vs `IBS_prop`, `IBD_prop` vs `patristic_distance` (or `phylo_sim`).
+   * Color by whether pair is a true transmission link (from pedigree) or by time difference.
+   * Joint density / hex plots to see structure.
+
+4. **Correlation tests**
+
+   * Pearson (after transformation and checking linearity) and Spearman.
+   * Mantel test between matrices (with permutations).
+
+5. **Classification / link prediction**
+
+   * For each pair, label true transmission (direct; or within ≤ g generations).
+   * Use each metric as a predictor to compute ROC/AUPRC.
+   * Compute precision@k and recall@k (k small, e.g., top 1–5 links per sample).
+   * Compare methods across scenarios (recombination, mutation rate, sampling fraction).
+
+6. **Sensitivity analyses**
+
+   * Repeat comparisons under varying recombination_rate, mutation_rate, sampling_frac, R0.
+   * Report how correlation and predictive performance change.
+
+---
+
+# 5) Practical pitfalls & special notes
+
+* **Recombination reduces IBD length quickly** — for pathogens with frequent recombination (e.g., malaria), expect IBD signals to decay fast; phylogenetic distances may still show divergence.
+* **Low mutation rate** → phylogenetic distances have little resolution; IBD can still show recent sharing.
+* **Phasing required for IBD** — many IBD callers assume phased haplotypes; poor phasing biases IBD.
+* **Consensus genomes vs within-host diversity** — consensus sequences hide within-host mixed infections; IBD/phylo computed on consensus may be misleading for transmission.
+* **Tree inference error**: comparing IBD to *inferred* phylogenies introduces inference error—use true trees from simulation as ground truth baseline first.
+
+---
+
+# 6) Useful diagnostics / summary metrics to report in your benchmarking paper
+
+* Pairwise Spearman correlations between `IBD_prop`, `IBS_prop`, and `phylo_sim`.
+* AUPRC and AUROC for predicting direct transmission edges using each metric as score.
+* Precision@1/3/5 (how many of top-k candidate edges per infectee are true).
+* Calibration plots of predicted probability vs. observed link frequency (if you fit a probabilistic model).
+* Performance as function of sampling fraction, recombination rate, mutation rate, and time since infection.
+* Confusion matrices for link prediction at chosen thresholds.
+
+---
+
+# 7) Quick code sketch (pseudo-Python) for comparing IBD_prop, IBS_prop, patristic_distance
+
+```python
+# pseudocode
+# pairs = list of all sampled pairs
+for (i,j) in pairs:
+    ibd_prop = total_ibd_length(i,j) / genome_length
+    ibs_prop = identical_sites(i,j) / n_sites
+    patristic = patristic_distance(tree, i, j)
+    phylo_sim = np.exp(-alpha * patristic)   # or use rank-based stats
+    is_true = 1 if (i infected j or j infected i) else 0
+    time_diff = abs(sample_time[i] - sample_time[j])
+    record row
+
+# Correlations
+spearman(ibd_prop, ibs_prop)
+spearman(ibd_prop, phylo_sim)
+
+# Predictive performance
+compute_aucpr(ibd_prop, is_true)
+compute_aucpr(ibs_prop, is_true)
+compute_aucpr(phylo_sim, is_true)
+```
+
+---
+
+# 8) Verdict: should you compare them?
+
+* **Yes**, but **not naively**. Use transformations, rank/relative methods and predictive evaluation frameworks. Treat IBD as the *best proxy for recent transmission* and evaluate how well IBS and phylogenetic measures recover the same signal under different biology and sampling scenarios.
+
+---
+
+
+* Transforms patristic distances into a bounded similarity score (multiple options).
+* Produces the requested exploratory plots (scatter + color, hex/joint density).
+* Runs Pearson & Spearman correlations and Mantel tests.
+* Runs binary link-prediction evaluation (ROC, AUPRC) and computes precision@k / recall@k.
+* Aggregates results across scenarios and performs sensitivity analyses.
+
+Assumptions about input data (shape & columns)
+
+* You have a **pairwise** data.frame / tibble `pairs_df` with one row per pair (i,j) and at least these columns:
+
+  * `id1`, `id2` — identifiers
+  * `IBD_prop` — total_IBD_length / genome_length (0..1)
+  * `IBS_prop` — proportion identical sites (0..1)
+  * `pat_dist` — patristic (phylogenetic) distance (e.g., substitutions/site)
+  * `is_true` — 1 if pair is a true direct transmission link (or 0 else)
+  * `time_diff` — absolute difference in sampling times (numeric)
+  * `scenario` — factor/character indicating scenario (recombination/mutation/etc)
+  * `generation_distance` — optional: pedigree generation distance between pair (for "within ≤ g generations")
+    If some of these columns are named differently adapt the code accordingly.
+
+Drop this into an R script / notebook. You need packages: tidyverse, ggplot2, hexbin, gridExtra, PRROC, pROC, vegan, furrr (optional for parallelization).
+
+```r
+# --- Required packages ---
+library(tidyverse)
+library(ggplot2)
+library(hexbin)
+library(gridExtra)
+library(PRROC)    # for AUPRC
+library(pROC)     # for ROC / AUC
+library(vegan)    # mantel test
+library(scales)   # for plotting scales
+```
+
+---
+
+# 1) Transform phylogenetic distance → similarity
+
+Two flexible transforms included:
+
+* exponential decay: `sim = exp(-alpha * d)` (alpha controls steepness)
+* inverse: `sim = 1 / (1 + beta * d)` (gentle conversion)
+* auto-fit `alpha` to place median distance at 0.5 similarity (heuristic)
+
+```r
+#' Transform patristic distances into bounded similarity (0..1)
+#'
+#' @param d numeric vector of patristic distances
+#' @param method "exp" or "inv" or "rank" (rank returns scaled ranks 0..1)
+#' @param alpha positive numeric for exp transform (if NULL it's auto-estimated)
+#' @param beta positive numeric for inverse transform (if NULL set beta = 1/median(d))
+#' @return numeric vector similarity (0..1)
+transform_phylo_to_similarity <- function(d,
+                                          method = c("exp", "inv", "rank"),
+                                          alpha = NULL,
+                                          beta = NULL) {
+  method <- match.arg(method)
+  d <- as.numeric(d)
+  if (method == "exp") {
+    if (is.null(alpha)) {
+      med <- median(d[is.finite(d) & !is.na(d)])
+      # place median distance at sim ~ 0.5 -> alpha = log(2)/med
+      alpha <- ifelse(med > 0, log(2) / med, 1)
+    }
+    sim <- exp(-alpha * d)
+  } else if (method == "inv") {
+    if (is.null(beta)) {
+      med <- median(d[is.finite(d) & !is.na(d)])
+      beta <- ifelse(med > 0, 1 / med, 1)
+    }
+    sim <- 1 / (1 + beta * d)
+  } else if (method == "rank") {
+    # normalized rank: highest similarity for smallest distance
+    r <- rank(d, ties.method = "average", na.last = "keep")
+    sim <- 1 - ((r - 1) / (max(r, na.rm = TRUE) - 1 + 1e-12))  # scale to 0..1
+  }
+  sim[is.na(sim)] <- 0
+  return(sim)
+}
+```
+
+Example usage:
+
+```r
+pairs_df <- pairs_df %>%
+  mutate(phylo_sim_exp = transform_phylo_to_similarity(pat_dist, method="exp"),
+         phylo_sim_inv = transform_phylo_to_similarity(pat_dist, method="inv"),
+         phylo_sim_rank = transform_phylo_to_similarity(pat_dist, method="rank"))
+```
+
+---
+
+# 2) Exploratory plots
+
+Helper plotting functions: scatter (with coloring by `is_true` or `time_diff`), hexbin joint density, and combined plot grid.
+
+```r
+# Scatter: IBD_prop vs IBS_prop or vs phylo_sim
+plot_scatter_pairs <- function(df,
+                               x = "IBD_prop",
+                               y = "IBS_prop",
+                               color_by = c("is_true", "time_diff"),
+                               title = NULL,
+                               alpha = 0.6,
+                               point_size = 1.2) {
+  color_by <- match.arg(color_by)
+  p <- ggplot(df, aes_string(x = x, y = y)) +
+    geom_point(aes_string(color = color_by), alpha = alpha, size = point_size) +
+    theme_minimal() +
+    labs(title = title, x = x, y = y, color = color_by)
+
+  # sensible coloring for binary is_true
+  if (color_by == "is_true") {
+    p <- p + scale_color_manual(values = c("0" = "grey70", "1" = "red"),
+                                labels = c("0" = "not_true", "1" = "true"))
+  } else {
+    p <- p + scale_color_viridis_c()
+  }
+  return(p)
+}
+
+# Hexbin joint density (good for dense scatter)
+plot_hex_density <- function(df, x = "IBD_prop", y = "phylo_sim_exp", bins = 40, title = NULL) {
+  ggplot(df, aes_string(x = x, y = y)) +
+    stat_binhex(bins = bins) +
+    scale_fill_gradient(low = "lightyellow", high = "darkred", trans = "log10") +
+    theme_minimal() +
+    labs(title = title, x = x, y = y, fill = "count")
+}
+
+# Combined explorer for a scenario (IBD vs IBS and IBD vs phylo_sim)
+plot_exploratory_for_scenario <- function(df, phylo_col = "phylo_sim_exp", scenario_name = NULL) {
+  p1 <- plot_scatter_pairs(df, x = "IBD_prop", y = "IBS_prop", color_by = "is_true",
+                           title = paste0("IBD_prop vs IBS_prop: ", scenario_name))
+  p2 <- plot_scatter_pairs(df, x = "IBD_prop", y = phylo_col, color_by = "time_diff",
+                           title = paste0("IBD_prop vs phylo_sim (", phylo_col, "): ", scenario_name))
+  p3 <- plot_hex_density(df, x = "IBD_prop", y = "IBS_prop", title = paste0("Hex: IBD vs IBS: ", scenario_name))
+  p4 <- plot_hex_density(df, x = "IBD_prop", y = phylo_col, title = paste0("Hex: IBD vs phylo_sim: ", scenario_name))
+
+  grid.arrange(p1, p2, p3, p4, ncol = 2)
+}
+```
+
+Call for a single scenario:
+
+```r
+plot_exploratory_for_scenario(filter(pairs_df, scenario == "scenario_1"), phylo_col = "phylo_sim_exp", scenario_name = "scenario_1")
+```
+
+---
+
+# 3) Correlation tests
+
+Pearson (after transformation checks) and Spearman; Mantel test for matrices.
+
+```r
+# Compute Pearson & Spearman between two columns, with optional logit transform for proportions
+compute_correlations <- function(df, var1, var2, transform_for_pearson = c("none","logit","sqrt")) {
+  transform_for_pearson <- match.arg(transform_for_pearson)
+  x <- df[[var1]]; y <- df[[var2]]
+  # optional transform
+  if (transform_for_pearson == "logit") {
+    eps <- 1e-9
+    x_t <- qlogis(pmin(pmax(x, eps), 1 - eps))
+    y_t <- qlogis(pmin(pmax(y, eps), 1 - eps))
+  } else if (transform_for_pearson == "sqrt") {
+    x_t <- sqrt(x); y_t <- sqrt(y)
+  } else {
+    x_t <- x; y_t <- y
+  }
+  pear <- cor.test(x_t, y_t, method = "pearson")
+  spear <- cor.test(x, y, method = "spearman", exact = FALSE)
+  return(list(pearson = pear, spearman = spear))
+}
+
+# Mantel test: requires distance matrices
+# Provide pairwise matrices (square) or build from pairwise list
+mantel_test_from_pairwise <- function(pairs_df, value_col, ids = NULL, nperm = 999) {
+  # if ids null infer unique ids from id1/id2
+  if (is.null(ids)) ids <- unique(c(pairs_df$id1, pairs_df$id2))
+  n <- length(ids)
+  # build distance/similarity matrix; we convert similarity->distance: d = 1-s
+  mat <- matrix(0, nrow = n, ncol = n, dimnames = list(ids, ids))
+  for (r in seq_len(nrow(pairs_df))) {
+    i <- as.character(pairs_df$id1[r]); j <- as.character(pairs_df$id2[r])
+    if (i %in% ids & j %in% ids) {
+      v <- pairs_df[[value_col]][r]
+      mat[i, j] <- v; mat[j, i] <- v
+    }
+  }
+  # convert similarity to distance if necessary (assume value_col is similarity in 0..1)
+  dist_mat <- as.dist(1 - mat)  # if column is distance already, skip this step
+  # simple fallback if diag zero not set
+  res <- vegan::mantel(dist_mat, dist_mat, permutations = nperm, method = "pearson")
+  return(res)
+}
+```
+
+Note: Mantel compares two matrices. Pass two matrices or use above and adapt to compare `IBD_prop` matrix vs `phylo_sim` matrix.
+
+---
+
+# 4) Classification / link prediction evaluation
+
+We compute ROC & AUPRC, and precision@k / recall@k. For precision@k we compute for each focal node (e.g., each potential infectee) the top-k predicted infectors and check fraction true. The code below assumes for each row you can interpret which is the candidate for being the infector of id2 (directional). If your data are undirected pairs, then precision@k can be computed using symmetric rules — adapt as needed.
+
+```r
+# ROC and AUPRC for a single predictor column
+compute_roc_aupr <- function(df, score_col = "IBD_prop", label_col = "is_true") {
+  scores <- df[[score_col]]
+  labels <- df[[label_col]]
+  # ROC / AUC
+  roc_obj <- pROC::roc(labels, scores, quiet = TRUE, direction = "<")
+  auc <- pROC::auc(roc_obj)
+  # AUPRC
+  pr_obj <- PRROC::pr.curve(scores.class0 = scores[labels == 1], scores.class1 = scores[labels == 0], curve = TRUE)
+  aupr <- pr_obj$auc.integral
+  return(list(roc = roc_obj, auc = auc, pr = pr_obj, aupr = aupr))
+}
+
+# precision@k / recall@k (directional)
+# We assume pairs are candidate edges id1 -> id2. Group by id2 (target infectee), rank candidates by score descending,
+# compute for each id2 precision@k and recall@k across its true infectors (rare).
+precision_recall_at_k <- function(pairs_df, score_col = "IBD_prop", label_col = "is_true", ks = c(1,3,5)) {
+  df <- pairs_df %>%
+    arrange(id2, desc(.data[[score_col]])) %>%
+    group_by(id2) %>%
+    mutate(rank = row_number()) %>%
+    ungroup()
+
+  results <- tibble(k = ks, precision = NA_real_, recall = NA_real_)
+  for (i in seq_along(ks)) {
+    k <- ks[i]
+    topk <- df %>% filter(rank <= k)
+    # per-target precision: for each id2, precision = (# true among topk candidates)/k
+    per_target <- topk %>% group_by(id2) %>%
+      summarise(tp = sum(.data[[label_col]] == 1), n = n()) %>%
+      mutate(prec = tp / k)
+    # average precision across targets (macro-averaged)
+    avg_prec <- mean(per_target$prec, na.rm = TRUE)
+    # recall: need ground truth positives per target (#true infectors)
+    true_per_target <- df %>% group_by(id2) %>% summarise(true_total = sum(.data[[label_col]] == 1))
+    # compute recall per target as tp/top_true (avoid division by zero)
+    per_target <- per_target %>% left_join(true_per_target, by = "id2") %>%
+      mutate(rec = ifelse(true_total > 0, tp / true_total, NA))
+    avg_rec <- mean(per_target$rec, na.rm = TRUE)
+    results$precision[i] <- avg_prec
+    results$recall[i] <- avg_rec
+  }
+  return(results)
+}
+```
+
+Compute ROC / AUPRC and precision@k for multiple predictors:
+
+```r
+evaluate_predictors <- function(df, predictors = c("IBD_prop","IBS_prop","phylo_sim_exp"), label_col = "is_true", ks = c(1,3,5)) {
+  out_list <- list()
+  for (pred in predictors) {
+    roc_pr <- compute_roc_aupr(df, score_col = pred, label_col = label_col)
+    prk <- precision_recall_at_k(df, score_col = pred, label_col = label_col, ks = ks)
+    out_list[[pred]] <- list(auc = as.numeric(roc_pr$auc), aupr = as.numeric(roc_pr$aupr), prk = prk, roc = roc_pr$roc)
+  }
+  return(out_list)
+}
+```
+
+---
+
+# 5) Compare methods across scenarios & sensitivity analyses
+
+Aggregate evaluations per scenario and plot trends.
+
+```r
+# Evaluate per scenario and gather AUC/AUPR and precision@k
+evaluate_across_scenarios <- function(pairs_df, predictors = c("IBD_prop","IBS_prop","phylo_sim_exp"), label_col = "is_true", ks = c(1,3,5)) {
+  scenarios <- unique(pairs_df$scenario)
+  results <- list()
+  for (sc in scenarios) {
+    df_sc <- filter(pairs_df, scenario == sc)
+    evals <- evaluate_predictors(df_sc, predictors = predictors, label_col = label_col, ks = ks)
+    # tidy summary for each predictor
+    summary_rows <- map_dfr(names(evals), function(pred) {
+      tibble(scenario = sc,
+             predictor = pred,
+             auc = evals[[pred]]$auc,
+             aupr = evals[[pred]]$aupr) %>%
+        bind_cols(bind_rows(evals[[pred]]$prk %>% mutate(.pred = pred)))
+    })
+    results[[sc]] <- summary_rows
+  }
+  final_df <- bind_rows(results)
+  return(final_df)
+}
+
+# Simple plotting of performance vs scenario (scenario can encode recomb/mut/sampling)
+plot_performance_vs_scenario <- function(summary_df, metric = c("auc","aupr"), predictor = NULL) {
+  metric <- match.arg(metric)
+  dfp <- summary_df %>% ungroup()
+  p <- ggplot(dfp, aes(x = scenario, y = .data[[metric]], color = predictor, group = predictor)) +
+    geom_point() + geom_line() + theme_minimal() +
+    labs(title = paste0(toupper(metric), " across scenarios"), x = "scenario", y = metric) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  return(p)
+}
+```
+
+Sensitivity analysis over numeric parameters (if your `scenario` data.frame has columns like `recomb_rate`, `mut_rate`, `sampling_frac`, `R0`):
+
+```r
+# If you have a scenario-level table linking scenario name -> parameter values, join it
+# Then plot AUC/AUPR as function of numeric parameter using geom_smooth or geom_point
+plot_metric_vs_param <- function(summary_df, scenario_meta, metric = "aupr", param = "sampling_frac") {
+  df <- summary_df %>% left_join(scenario_meta, by = "scenario")
+  ggplot(df, aes_string(x = param, y = metric, color = "predictor")) +
+    geom_point() + geom_smooth(method = "loess", se = TRUE) +
+    theme_minimal() +
+    labs(title = paste0(metric, " vs ", param), x = param, y = metric)
+}
+```
+
+---
+
+# 6) Example workflow (putting it together)
+
+```r
+# 1. Transform phylogenetic distances
+pairs_df <- pairs_df %>%
+  mutate(phylo_sim_exp = transform_phylo_to_similarity(pat_dist, method = "exp"),
+         phylo_sim_inv = transform_phylo_to_similarity(pat_dist, method = "inv"),
+         phylo_sim_rank = transform_phylo_to_similarity(pat_dist, method = "rank"))
+
+# 2. Exploratory plots for scenario "A"
+plot_exploratory_for_scenario(filter(pairs_df, scenario == "A"), phylo_col = "phylo_sim_exp", scenario_name = "A")
+
+# 3. Correlations (whole dataset or per scenario)
+corr_res <- compute_correlations(pairs_df, "IBD_prop", "IBS_prop", transform_for_pearson = "logit")
+print(corr_res$pearson)
+print(corr_res$spearman)
+
+# 4. Mantel test example: build matrices for IBD_prop and phylo_sim_exp
+ids <- unique(c(pairs_df$id1, pairs_df$id2))
+# prepare symmetric matrices:
+build_sym_matrix <- function(pairs_df, value_col, ids) {
+  n <- length(ids)
+  m <- matrix(NA, nrow = n, ncol = n, dimnames = list(ids, ids))
+  for (r in seq_len(nrow(pairs_df))) {
+    i <- as.character(pairs_df$id1[r]); j <- as.character(pairs_df$id2[r])
+    if (i %in% ids & j %in% ids) {
+      m[i,j] <- pairs_df[[value_col]][r]; m[j,i] <- m[i,j]
+    }
+  }
+  diag(m) <- 0
+  m[is.na(m)] <- 0
+  return(m)
+}
+mat_ibd <- build_sym_matrix(pairs_df, "IBD_prop", ids)
+mat_phylo <- build_sym_matrix(pairs_df, "phylo_sim_exp", ids)
+vegan::mantel(as.dist(1-mat_ibd), as.dist(1-mat_phylo), permutations = 999, method="pearson")
+
+# 5. Classification / link prediction for a scenario
+df_sc <- filter(pairs_df, scenario == "A")
+evals <- evaluate_predictors(df_sc, predictors = c("IBD_prop","IBS_prop","phylo_sim_exp"))
+# inspect AUC/AUPR
+map_dfr(names(evals), ~ tibble(predictor = .x, auc = evals[[.x]]$auc, aupr = evals[[.x]]$aupr))
+
+# 6. precision@k
+precision_recall_at_k(df_sc, score_col = "IBD_prop", label_col = "is_true", ks = c(1,3,5))
+```
+
+---
+
+# 7) Practical tips & caveats (short)
+
+* For AUPRC use PRROC (it handles score distributions well). Use AUPRC when positives are rare.
+* When computing Mantel use permutations (≥999) and ensure matrices are constructed consistently (distance vs similarity).
+* Use rank-based comparisons (Spearman) when linearity assumptions break.
+* For precision@k the definition depends on directionality; ensure your pairs are directional `infector -> infectee`. If not directional, transform accordingly (e.g., for each focal host compute top-k neighbors).
+* When comparing across scenarios, use scenario metadata (recomb_rate, mut_rate, sample_frac) to draw sensitivity plots and regression models (e.g., predict AUPR ~ recomb_rate + sample_frac).
+
+---
+
+Here is a clean, cohesive R template that assumes **separate data files for IBD**, **IBS**, and a **phylogenetic tree**, and produces the harmonized pairwise matrices and long-format data frames needed for the comparisons you described.
+
+Everything below assumes your three inputs are something like:
+
+* `ibd_df`: data frame with columns **id1, id2, ibd_prop**
+* `ibs_df`: data frame with columns **id1, id2, ibs_prop**
+* `treefile`: Newick file from your phylogenetic inference (IQ-TREE, RAxML, FastTree, etc.)
+* `true_links`: data frame with **id1, id2, is_transmission**, or possibly number of generations in between.
+
+The code transforms patristic distances into similarity metrics, merges all metrics into one long table, and prepares them for scatterplots, correlations, and classification.
+
+---
+
+## 1. Load libraries
+
+```r
+library(ape)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(purrr)
+library(phangorn)
+library(pROC)
+library(vegan)   # Mantel test
+library(ggpubr)
+library(data.table)
+```
+
+---
+
+## 2. Helper: make all pairwise combinations from a distance matrix
+
+```r
+distance_to_long <- function(distmat, metric_name = "dist") {
+  as.data.frame(as.table(distmat)) %>%
+    dplyr::rename(id1 = Var1, id2 = Var2, value = Freq) %>%
+    dplyr::mutate(metric = metric_name)
+}
+```
+
+---
+
+## 3. Transform phylogenetic distance into similarity
+
+### Simple linear inverse similarity
+
+A widely used transformation:
+
+[
+\text{sim} = 1 - \frac{d}{\max(d)}
+]
+
+```r
+phylo_dist_to_similarity <- function(distvec) {
+  maxd <- max(distvec, na.rm = TRUE)
+  sim  <- 1 - (distvec / maxd)
+  sim[sim < 0] <- 0
+  sim
+}
+```
+
+### Optional nonlinear similarity (Gaussian kernel)
+
+Useful when you want similarity to decay faster with distance:
+
+[
+\text{sim} = \exp(-d^2 / (2\sigma^2))
+]
+
+```r
+phylo_dist_gaussian <- function(distvec, sigma = NULL) {
+  if (is.null(sigma)) sigma <- median(distvec, na.rm = TRUE)
+  exp(-(distvec^2) / (2 * sigma^2))
+}
+```
+
+---
+
+## 4. Extract patristic distances from a Newick tree
+
+```r
+compute_phylo_distances <- function(treefile) {
+  tree <- ape::read.tree(treefile)
+  D <- ape::cophenetic.phylo(tree)  # matrix of patristic distances
+  return(D)
+}
+```
+
+Convert to similarity:
+
+```r
+phylo_long <- function(treefile, method = "linear") {
+  D <- compute_phylo_distances(treefile)
+  df <- distance_to_long(D, metric_name = "patristic")
+
+  if (method == "linear") {
+    df <- df %>% mutate(phylo_sim = phylo_dist_to_similarity(value))
+  } else if (method == "gaussian") {
+    df <- df %>% mutate(phylo_sim = phylo_dist_gaussian(value))
+  }
+  df
+}
+```
+
+---
+
+## 5. Merge IBD, IBS, and phylogenetic similarity
+
+This harmonizes all into a single long table:
+
+```r
+merge_metrics <- function(ibd_df, ibs_df, phylo_df) {
+  ibd_df2  <- ibd_df  %>% rename(IBD = ibd_prop)
+  ibs_df2  <- ibs_df  %>% rename(IBS = ibs_prop)
+  phylo_df2 <- phylo_df %>% select(id1, id2, phylo_sim)
+
+  merged <- ibd_df2 %>%
+    full_join(ibs_df2,  by = c("id1", "id2")) %>%
+    full_join(phylo_df2, by = c("id1", "id2"))
+
+  merged
+}
+```
+
+---
+
+## 6. Add ground truth transmission labels
+
+This assumes you have a pedigree-derived file:
+
+* `true_links`: **id1, id2, direct_link** (0/1)
+  or
+* **generation_distance**, from which you can define direct (≤1) or near (≤g).
+
+```r
+add_truth <- function(metric_df, true_links) {
+  metric_df %>%
+    left_join(true_links, by = c("id1", "id2"))
+}
+```
+
+---
+
+## 7. Exploratory plots
+
+### Scatter plots (IBD vs IBS, IBD vs phylogenetic similarity)
+
+```r
+plot_scatter <- function(df) {
+  p1 <- ggplot(df, aes(IBD, IBS, color = factor(direct_link))) +
+    geom_point(alpha = 0.5) +
+    theme_minimal() +
+    labs(color = "Transmission")
+
+  p2 <- ggplot(df, aes(IBD, phylo_sim, color = factor(direct_link))) +
+    geom_point(alpha = 0.5) +
+    theme_minimal() +
+    labs(color = "Transmission")
+
+  ggpubr::ggarrange(p1, p2, ncol = 2)
+}
+```
+
+### Hexbin / joint density
+
+```r
+plot_hex <- function(df) {
+  ggplot(df, aes(IBD, IBS)) +
+    geom_hex(bins = 40) +
+    theme_minimal()
+}
+```
+
+---
+
+## 8. Correlation tests
+
+### Pairwise correlation
+
+```r
+compute_correlations <- function(df) {
+  list(
+    pearson_IBD_IBS = cor(df$IBD, df$IBS, method = "pearson", use = "complete.obs"),
+    spearman_IBD_IBS = cor(df$IBD, df$IBS, method = "spearman", use = "complete.obs"),
+    pearson_IBD_phylo = cor(df$IBD, df$phylo_sim, method = "pearson", use = "complete.obs"),
+    spearman_IBD_phylo = cor(df$IBD, df$phylo_sim, method = "spearman", use = "complete.obs")
+  )
+}
+```
+
+### Mantel test (matrix correlation)
+
+You need distance matrices. For similarity, invert:
+
+[
+d = 1 - \text{similarity}
+]
+
+```r
+mantel_compare <- function(df_wide) {
+  # df_wide is a distance/similarity matrix, not the long df
+  mantel(as.dist(df_wide$IBD_dist),
+         as.dist(df_wide$IBS_dist),
+         permutations = 999)
+}
+```
+
+---
+
+## 9. Classification / Link prediction
+
+### ROC / AUPRC for each metric
+
+```r
+compute_auc <- function(df) {
+  out <- list()
+
+  # Only retain pairs with known truth
+  d <- df %>% filter(!is.na(direct_link))
+
+  out$ROC_IBD   <- roc(d$direct_link, d$IBD)
+  out$ROC_IBS   <- roc(d$direct_link, d$IBS)
+  out$ROC_PHYLO <- roc(d$direct_link, d$phylo_sim)
+
+  out$AUPRC_IBD   <- pr.curve(scores.class0 = d$IBD[d$direct_link==1],
+                              scores.class1 = d$IBD[d$direct_link==0])
+  out$AUPRC_IBS   <- pr.curve(scores.class0 = d$IBS[d$direct_link==1],
+                              scores.class1 = d$IBS[d$direct_link==0])
+  out$AUPRC_PHYLO <- pr.curve(scores.class0 = d$phylo_sim[d$direct_link==1],
+                              scores.class1 = d$phylo_sim[d$direct_link==0])
+
+  out
+}
+```
+
+### Precision@k and Recall@k
+
+```r
+precision_at_k <- function(df, metric = "IBD", k = 3) {
+  df2 <- df %>% filter(!is.na(direct_link))
+
+  df_ranked <- df2 %>%
+    arrange(desc(.data[[metric]])) %>%
+    mutate(rank = row_number())
+
+  topk <- df_ranked %>% slice(1:k)
+
+  precision <- mean(topk$direct_link == 1)
+  recall    <- sum(topk$direct_link == 1) / sum(df2$direct_link == 1)
+
+  list(precision = precision, recall = recall)
+}
+```
+
+---
+
+## 10. Scenario-wise comparison
+
+Assume each scenario corresponds to its own input files. You can wrap everything:
+
+```r
+run_full_pipeline <- function(ibd_file, ibs_file, treefile, truth_file, method="linear") {
+  ibd_df <- fread(ibd_file)
+  ibs_df <- fread(ibs_file)
+  truth  <- fread(truth_file)
+
+  phylo_df <- phylo_long(treefile, method = method)
+
+  merged <- merge_metrics(ibd_df, ibs_df, phylo_df)
+  merged <- add_truth(merged, truth)
+
+  list(
+    df = merged,
+    correlations = compute_correlations(merged),
+    auc = compute_auc(merged)
+  )
+}
+```
+
+You can then loop over scenarios:
+
+```r
+scenarios <- list.files("results/", pattern="scenario", full.names=TRUE)
+
+results <- map(scenarios, ~ run_full_pipeline(
+  ibd_file = file.path(.x, "ibd.csv"),
+  ibs_file = file.path(.x, "ibs.csv"),
+  treefile = file.path(.x, "tree.nwk"),
+  truth_file = file.path(.x, "truth_links.csv")
+))
+```
+
+---
+
+## Summary of what the code gives you
+
+You now have:
+
+1. **Patristic distances → similarity metrics**
+   Ready for comparison with IBD and IBS.
+
+2. **Unified pairwise table**
+   Merging IBD, IBS, phylogenetic similarity, and ground-truth transmission.
+
+3. **Exploratory visualizations**
+   Scatter plots, hex plots, colored by true transmission links.
+
+4. **Correlation and Mantel tests**
+   Quantifying how well each metric aligns with IBD or truth.
+
+5. **Classification & link prediction**
+   ROC, AUPRC, precision@k, recall@k for each metric.
+
+6. **Scenario analysis loops**
+   Making it easy to assess sensitivity to recombination, mutation, sampling fraction, R₀.
+
+Here’s a clean, academic-style set of **R functions** to:
+
+1. Define **ground-truth transmission labels** from pedigree-based generation distances.
+2. Compute **TP/FP/TN/FN** and a confusion matrix for any metric.
+3. Compute and **plot ROC / PR curves** and **AUPRC** for each metric.
+4. Prepare everything so you can compare *IBD*, *IBS*, and *phylogenetic similarity* side-by-side across all scenarios.
+
+---
+
+# 1. Ground-truth transmission labels from pedigree generations
+
+Assume your ground-truth file looks like:
+
+```
+id1 | id2 | generations
+```
+
+Where:
+
+* `generations = 1` → direct transmission
+* `generations = 2` → secondary
+* …
+
+You can choose your cutoff (e.g., `≤ g` generations).
+
+### Function: define ground truth labels
+
+```r
+define_ground_truth <- function(df_ground, gen_cutoff = 1) {
+  df_ground$true_link <- df_ground$generations <= gen_cutoff
+  df_ground
+}
+```
+
+If `gen_cutoff = 2`, you include primary and secondary links as positives.
+
+---
+
+# 2. Merge metric datasets with ground truth
+
+Suppose you have:
+
+* IBD dataframe: `df_ibd` with columns: `id1`, `id2`, `ibd_prop`
+* IBS dataframe: `df_ibs` with columns: `id1`, `id2`, `ibs_prop`
+* Phylo dataframe: `df_phylo` with columns: `id1`, `id2`, `phylo_dist`
+  You already converted `phylo_dist` → `phylo_sim`, so you also have `phylo_sim`.
+
+### Function: merge all 3 metrics with the ground truth
+
+```r
+merge_metrics_with_ground_truth <- function(df_ground, df_ibd, df_ibs, df_phylo) {
+  df <- df_ground |>
+    dplyr::left_join(df_ibd, by = c("id1", "id2")) |>
+    dplyr::left_join(df_ibs, by = c("id1", "id2")) |>
+    dplyr::left_join(df_phylo, by = c("id1", "id2"))
+
+  df
+}
+```
+
+This gives one large table with:
+
+```
+id1 | id2 | generations | true_link | ibd_prop | ibs_prop | phylo_dist | phylo_sim
+```
+
+---
+
+# 3. Confusion matrix components for **any metric**
+
+You want to classify pairs as links or non-links.
+To do this, you compare the *metric value* to a threshold.
+
+### Function: compute TP/FP/TN/FN
+
+```r
+compute_confusion <- function(df, score_col, truth_col = "true_link", threshold) {
+
+  predicted <- df[[score_col]] >= threshold
+  truth <- df[[truth_col]]
+
+  TP <- sum(predicted & truth, na.rm = TRUE)
+  FP <- sum(predicted & !truth, na.rm = TRUE)
+  TN <- sum(!predicted & !truth, na.rm = TRUE)
+  FN <- sum(!predicted & truth, na.rm = TRUE)
+
+  list(
+    TP = TP,
+    FP = FP,
+    TN = TN,
+    FN = FN,
+    confusion_matrix = matrix(
+      c(TP, FP, FN, TN),
+      nrow = 2,
+      byrow = TRUE,
+      dimnames = list(
+        c("Pred_Pos", "Pred_Neg"),
+        c("True_Pos", "True_Neg")
+      )
+    )
+  )
+}
+```
+
+This works for **IBD**, **IBS**, or **phylo_sim**, or anything else as long as “higher score = more related”.
+
+---
+
+# 4. ROC and PR curves for each metric
+
+I recommend **pROC** for ROC and **PRROC** for precision–recall.
+
+```r
+library(pROC)
+library(PRROC)
+```
+
+### Function: compute ROC and PR curves
+
+```r
+compute_roc_pr <- function(df, score_col, truth_col = "true_link") {
+
+  # ROC
+  roc_obj <- pROC::roc(df[[truth_col]], df[[score_col]], quiet = TRUE)
+
+  # PR Curve (needs scores for positives & negatives)
+  fg <- df[df[[truth_col]] == TRUE,  score_col]
+  bg <- df[df[[truth_col]] == FALSE, score_col]
+
+  pr_obj <- PRROC::pr.curve(scores.class0 = fg, scores.class1 = bg, curve = TRUE)
+
+  list(
+    roc = roc_obj,
+    pr = pr_obj,
+    auc_roc = pROC::auc(roc_obj),
+    auc_pr = pr_obj$auc.integral
+  )
+}
+```
+
+---
+
+# 5. Plot ROC / PR curves for multiple metrics
+
+### ROC plotting
+
+```r
+plot_multi_roc <- function(results_list) {
+  plot(NULL, xlim = c(0,1), ylim = c(0,1),
+       xlab = "False Positive Rate", ylab = "True Positive Rate")
+
+  for (metric in names(results_list)) {
+    lines(1 - results_list[[metric]]$roc$specificities,
+          results_list[[metric]]$roc$sensitivities,
+          lwd = 2)
+  }
+  legend("bottomright", legend = names(results_list), lwd = 2)
+}
+```
+
+### PR plotting
+
+```r
+plot_multi_pr <- function(results_list) {
+  plot(NULL, xlim = c(0,1), ylim = c(0,1),
+       xlab = "Recall", ylab = "Precision")
+
+  for (metric in names(results_list)) {
+    lines(results_list[[metric]]$pr$curve[,1],   # recall
+          results_list[[metric]]$pr$curve[,2],   # precision
+          lwd = 2)
+  }
+  legend("topright", legend = names(results_list), lwd = 2)
+}
+```
+
+---
+
+# 6. Wrapper function to compute all metrics side-by-side
+
+This simplifies your benchmarking.
+
+```r
+compare_all_metrics <- function(df) {
+
+  results <- list(
+    IBD   = compute_roc_pr(df, "ibd_prop"),
+    IBS   = compute_roc_pr(df, "ibs_prop"),
+    Phylo = compute_roc_pr(df, "phylo_sim")
+  )
+
+  results
+}
+```
+
+Then:
+
+```r
+results <- compare_all_metrics(df_all)
+
+plot_multi_roc(results)
+plot_multi_pr(results)
+
+results$IBD$auc_roc
+results$Phylo$auc_pr
+```
+
+---
+
+# 7. Precision@k and Recall@k (important for transmission inference)
+
+These metrics capture “how many of the *closest* pairs are true transmission links”, which mimics the way epidemiologists interpret networks.
+
+### Function: precision@k
+
+```r
+precision_at_k <- function(df, score_col, truth_col = "true_link", k = 5) {
+
+  df_sorted <- df[order(df[[score_col]], decreasing = TRUE), ]
+
+  top_k <- head(df_sorted, k)
+
+  precision <- mean(top_k[[truth_col]])
+  precision
+}
+```
+
+### Function: recall@k
+
+```r
+recall_at_k <- function(df, score_col, truth_col = "true_link", k = 5) {
+  positives <- sum(df[[truth_col]])
+  df_sorted <- df[order(df[[score_col]], decreasing = TRUE), ]
+
+  top_k <- head(df_sorted, k)
+
+  recall <- sum(top_k[[truth_col]]) / positives
+  recall
+}
+```
+
+---
+
+# 8. Summary tables for reporting
+
+```r
+summarize_performance <- function(results_list) {
+  data.frame(
+    metric = names(results_list),
+    AUC_ROC = sapply(results_list, function(x) x$auc_roc),
+    AUC_PR  = sapply(results_list, function(x) x$auc_pr)
+  )
+}
+```
+
+---
+
+# 9. Using the full workflow
+
+```r
+df_ground <- define_ground_truth(df_ground, gen_cutoff = 1)
+
+df_all <- merge_metrics_with_ground_truth(df_ground, df_ibd, df_ibs, df_phylo)
+
+results <- compare_all_metrics(df_all)
+
+plot_multi_roc(results)
+plot_multi_pr(results)
+
+summarize_performance(results)
+```
+
+---
+
+# Where this takes you
+
+You now have:
+
+* A strict way to define transmission truth
+* Unified tables linking IBD, IBS, phylogenetic similarity
+* ROC/PR curves for each metric
+* Confusion matrices for any threshold
+* Precision@k and Recall@k for link-ranking evaluation
+* Functions ready for looping across scenarios: recombination rate, mutation rate, sampling fraction, R0.
+
+This gives you the spine of a rigorous simulation-based benchmarking framework.

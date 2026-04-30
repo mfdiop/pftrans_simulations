@@ -1,0 +1,121 @@
+// =============================================================
+// SLiM SPATIALLY STRUCTURED SELECTION & TRANSMISSION SIMULATION
+// =============================================================
+  
+  function (void) set_default(string k, lifs v) {
+    if (!exists(k)) defineConstant(k, v);
+    catn(c("Parameter", k, v), sep="\t");
+    return NULL;
+  }
+
+initialize() {
+  // ----- Core parameters -----
+  set_default("L", 2e6);             // genome length (2 Mb typical for Pf)
+  set_default("r", 7.4e-7);          // recombination rate (Pf avg per bp)
+  set_default("mu", 1.5e-9);         // neutral mutation rate per bp per gen
+  set_default("s", 0.1);             // selection coefficient
+  set_default("h", 0.5);             // dominance coefficient
+  set_default("Ne0", 3000);          // initial population size
+  set_default("W", 40);              // spatial width (km, arbitrary units)
+  set_default("SIGMA", 1.2);         // dispersal distance
+  set_default("K", 0.5);             // carrying capacity per unit area
+  set_default("LAMBDA", 1.5);        // birth rate per gen
+  set_default("MU", 0.3);            // baseline mortality
+  set_default("selpos", asInteger(L / 2)); // selected locus position
+  set_default("sim_gens", 2000);     // total simulation generations
+  set_default("outid", 1);           // replicate index
+  
+  // ----- Initialize model type -----
+  initializeSLiMModelType("nonWF");
+  initializeSLiMOptions(dimensionality="xy", keepPedigrees=T);
+  initializeTreeSeq();
+  
+  // ----- Define mutation types -----
+  initializeMutationType("m1", 0.5, "f", 0.0);  // neutral
+  initializeMutationType("m2", h, "f", s);      // selected mutation
+  initializeGenomicElementType("g1", m1, 1.0);
+  initializeGenomicElement(g1, 0, L - 1);
+  initializeRecombinationRate(r);
+  initializeMutationRate(mu);
+  
+  // ----- Spatial interactions -----
+  initializeInteractionType("i1", "xy", reciprocal=T, maxDistance=3*SIGMA);
+  i1.setInteractionFunction("n", 1.0/(2*PI*SIGMA^2), SIGMA);
+  
+  defineGlobal("restart_counter", 0);
+}
+
+// Trick: only run modifyChild in the last twenty generations so its much faster
+s0:10 modifyChild()
+{
+  if (!sim_relatedness)
+    return T; // normal simulation or old generations, always return T
+  
+  // use this to let 50% of candicate pass without checking pedigree relatedness
+  // so the Ne etimates are more stable
+  if (child.index % 2 == 0)
+    return T;
+  prob = parent1.relatedness(parent2);
+  if ((prob > 1.0 / 32) & (prob < 1.0 / 4))
+    return T;
+  
+  // for unrelated samples return True with a small probability
+  else
+    return sample(c(T, F), size=1, replace=T, weights=c(1, 999));
+}
+
+// Population setup
+1 early() {
+  sim.addSubpop("p1", asInteger(K * W * W));
+  p1.setSpatialBounds(c(0.0, 0.0, W, W));
+  for (ind in p1.individuals)
+    ind.setSpatialPosition(p1.pointUniform());
+  catn("Initialized population across 2D spatial grid.");
+}
+
+// Reproduction with local density dependence
+reproduction() {
+  neighbor_density = i1.localPopulationDensity(individual);
+  n_offspring = rpois(1, LAMBDA / (1 + neighbor_density / K));
+  mate = i1.drawByStrength(individual, 1);
+  
+  if (size(mate) > 0) {
+    for (k in seqLen(n_offspring)) {
+      offspring = p1.addCrossed(individual, mate);
+      pos = individual.spatialPosition + rnorm(2, 0, SIGMA);
+      offspring.setSpatialPosition(p1.pointReflected(pos));
+      catn(c("PEDIGREE", sim.generation, individual.id, mate.id, offspring.id), sep = "\t");
+    }
+  }
+}
+
+// Mortality control
+early() {
+  p1.fitnessScaling = 1.0 - MU;
+}
+
+late() {
+  i1.evaluate(p1);
+}
+
+// Introduce selected mutation mid-simulation
+1000 late() {
+  catn("Introducing beneficial mutation at gen 1000.");
+  sample(p1.genomes, 1).addNewDrawnMutation(m2, selpos);
+}
+
+// Record individuals for ancestry tracing
+1500 late() {
+  sim.treeSeqRememberIndividuals(p1.individuals);
+  catn("Remembered individuals for ancestry tracing.");
+}
+
+// Output and finish
+2000 late() {
+  sim.treeSeqOutput(paste("spatial_pf_sim_", outid, ".trees", sep=""));
+  if (sim.generation == 100) {
+    sim.treeSeqOutput("output/SLiM_with_pedigree.trees");
+  }
+  catn("Simulation complete.");
+  sim.simulationFinished();
+}

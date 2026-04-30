@@ -1,0 +1,108 @@
+// Multi-population malaria transmission model with migration
+// Simulates transmission bottlenecks and population structure
+
+initialize() {
+    // Parameters (set from command line)
+    if (!exists("N")) defineConstant("N", 10000);              // Pop size per deme
+    if (!exists("n_pops")) defineConstant("n_pops", 3);        // Number of populations
+    if (!exists("mig_rate")) defineConstant("mig_rate", 0.01); // Migration rate
+    if (!exists("bottleneck")) defineConstant("bottleneck", 5); // Transmission bottleneck
+    if (!exists("rec_rate")) defineConstant("rec_rate", 1e-7); // Recombination rate
+    if (!exists("mu")) defineConstant("mu", 1e-8);             // Mutation rate
+    if (!exists("generations")) defineConstant("generations", 1000);
+    if (!exists("s")) defineConstant("s", 0.0);                // Selection coefficient
+    if (!exists("h")) defineConstant("h", 0.5);                // Dominance
+    if (!exists("selfing")) defineConstant("selfing", 0.0);    // Selfing rate
+    if (!exists("outdir")) defineConstant("outdir", ".");
+    if (!exists("scenario_id")) defineConstant("scenario_id", "test");
+    
+    // Genome
+    if (!exists("L")) defineConstant("L", 1000000);            // Sequence length
+    
+    initializeTreeSeq();
+    initializeMutationRate(0);  // Add mutations later with msprime
+    initializeMutationType("m1", h, "f", s);  // Neutral/selected
+    initializeGenomicElementType("g1", m1, 1.0);
+    initializeGenomicElement(g1, 0, L-1);
+    initializeRecombinationRate(rec_rate);
+    initializeSex("A");  // Asexual/haploid reproduction
+}
+
+// Create initial populations
+1 early() {
+    for (pop_id in 1:n_pops) {
+        sim.addSubpop(pop_id, N);
+    }
+    
+    // Set up migration if multiple populations
+    if (n_pops > 1) {
+        for (i in 1:n_pops) {
+            for (j in 1:n_pops) {
+                if (i != j) {
+                    // Symmetric migration between all populations
+                    sim.subpopulations[i-1].setMigrationRates(j, mig_rate);
+                }
+            }
+        }
+    }
+    
+    catn("Initialized " + n_pops + " populations");
+    catn("  Population size: " + N);
+    catn("  Migration rate: " + mig_rate);
+    catn("  Recombination rate: " + rec_rate);
+    catn("  Generations: " + generations);
+}
+
+// Implement transmission bottleneck
+reproduction() {
+    // Simulate transmission bottleneck by sampling limited genomes
+    
+    if (selfing > 0 && runif(1) < selfing) {
+        // Selfing
+        offspring = subpop.addCrossed(individual, individual);
+    } else {
+        // Outcrossing
+        mate = subpop.sampleIndividuals(1);
+        offspring = subpop.addCrossed(individual, mate);
+    }
+    
+    // Simulate bottleneck: only some offspring survive transmission
+    // This is a simplified model - in reality would model within-host dynamics
+    if (runif(1) < (asFloat(bottleneck) / N)) {
+        return offspring;
+    }
+    
+    return NULL;
+}
+
+// Regulate population size
+early() {
+    // Keep population sizes constant
+    for (pop in sim.subpopulations) {
+        if (pop.individualCount > N) {
+            pop.setSubpopulationSize(N);
+        }
+    }
+}
+
+// Monitor and output
+100: late() {
+    catn("Generation " + sim.cycle + ":");
+    for (pop in sim.subpopulations) {
+        catn("  " + pop.id + ": " + pop.individualCount + " individuals");
+    }
+}
+
+// End simulation and save
+999999 late() {
+    if (sim.cycle >= generations) {
+        catn("Simulation complete at generation " + sim.cycle);
+        
+        // Save tree sequence
+        outfile = outdir + "/slim_output_" + scenario_id + ".trees";
+        sim.treeSeqOutput(outfile);
+        
+        catn("Saved tree sequence: " + outfile);
+        sim.simulationFinished();
+    }
+}

@@ -1,0 +1,548 @@
+---
+title: |
+    **Mapping when genomic data can and cannot detect malaria transmission: biological constraints on inference**
+
+author: []
+
+date: ""
+
+output:
+  word_document: default
+  pdf_document:
+    keep_tex: yes
+    fig_caption: yes
+    latex_engine: xelatex
+    extra_dependencies: xcolor
+    
+fontsize: 11pt
+
+geometry: margin=1in
+header-includes:
+  - \usepackage{authblk}
+  - \usepackage{helvet}
+  - \usepackage{fontspec}
+  - \setmainfont{Helvetica}
+  - \usepackage[left]{lineno}
+  - \usepackage{setspace}
+  - \doublespacing
+  - \usepackage{amsmath}
+  - \usepackage{graphicx}
+  - \usepackage{caption}
+  - \usepackage{float}
+  - \usepackage{siunitx}
+  - \usepackage{placeins}
+  - \usepackage{sectsty}
+  - \sectionfont{\bfseries}
+  - \subsectionfont{\bfseries}
+  - \subsubsectionfont{\bfseries}
+  - \usepackage[labelfont=bf]{caption}
+  - \usepackage{xcolor}
+  - \definecolor{captionblue}{HTML}{1F4E79}
+  - \usepackage[labelfont={bf,color=captionblue}]{caption}
+  # - \usepackage{hyperref}
+  - \usepackage{soul}
+  - \sethlcolor{yellow}
+  - \usepackage{hyperref}
+  - \hypersetup{
+      colorlinks=false,
+      pdfborder={0 0 0.5},
+      citebordercolor={0.8 0 0},
+      linkbordercolor={0 0 0.8},
+      urlbordercolor={0 0.5 0.8}
+    }
+
+  
+bibliography: references.bib
+link-citations: yes
+# linkcolor: red # Color citations
+---
+
+\vspace{1mm}
+
+```{=latex}
+\author{
+Mouhamadou Fadel DIOP$^{1,2}$,
+David Jeffries$^{1}$,
+Nuredin Mohammed$^{1}$,
+Martin Holland$^{4}$,
+Alfred Amambua-Ngwa$^{1,2,3*}$
+}
+
+\noindent
+$^{1}$ MRC Unit The Gambia at London School of Hygiene and Tropical Medicine, Banjul, The Gambia\\
+$^{2}$ London School of Hygiene and Tropical Medicine, London, UK\\
+$^{3}$ Department of Infection Biology, London School of Hygiene and Tropical Medicine, London, UK\\
+$^{4}$ Wellcome Sanger Institute, Hinxton, UK
+ 
+\vspace{5mm}
+*Correspondence: \href{mailto:angwa@mrc.gm}{angwa@mrc.gm}; \href{mailto:alfred.ngwa@lshtm.ac.uk}{alfred.ngwa@lshtm.ac.uk}
+```
+
+\newpage
+
+# Abstract
+
+Genomic surveillance is increasingly used to characterise malaria transmission, but in Plasmodium. *falciparum* the recoverability of recent transmission links is fundamentally constrained by obligate sexual recombination, polyclonal infections, and high background relatedness. The conditions under which transmission connectivity remains statistically detectable and when inference collapses are poorly defined. Using a forward-time simulation framework with complete genealogical ground truth, we map the detectability landscape of recent P. *falciparum* transmission connectivity across systematic variation in recombination rate, sample size, migration, and generational transmission depth. Rather than comparing inference methods or recovering transmission direction, which is generally non-identifiable in vector-borne malaria, we quantify when genomic data contain sufficient signal to distinguish recently linked from unrelated infections. Detectability exhibits threshold-like transitions governed primarily by recombination rate. At recombination rates below approximately $10^{-7}$ per base pair per generation, genomic similarity distributions between linked and unrelated pairs overlap sufficiently that no inference approach achieves useful discriminative performance under any surveillance configuration examined — a hard biological floor set by parasite biology rather than by methodological limitations. Above this threshold, detectability improves substantially but remains sensitive to sampling design: increasing sample size reduces rather than improves maximum achievable performance, reflecting dilution of transmission-linked pairs within a growing background of unrelated infections — a result with direct implications for how genomic surveillance programs should be designed. Migration rate, by contrast, is a second-order determinant throughout, modulating detectability by less than 0.03 AUPRC units within any recombination stratum, an order of magnitude smaller than the recombination-driven gradient. These findings provide a principled, biologically grounded framework for interpreting genomic transmission inference results and for aligning surveillance design with the constraints imposed by parasite biology.
+
+
+```{=latex}
+
+\date{}
+\maketitle
+\linenumbers
+```
+
+\newpage
+
+# **Introduction**
+
+Understanding how malaria spreads between individuals and across communities remains central to malaria control and elimination [@WHO2023]. Transmission dynamics determine where interventions should be targeted, how rapidly parasites move through populations, and whether local transmission persists despite control efforts [@smith2010; @Griffin2010]. Over the past decade, genomic data have become an increasingly integral component of malaria surveillance, applied to distinguish local transmission from importation, map parasite population connectivity, and reconstruct transmission networks at fine spatial and temporal scales [@Neafsey2015; @Wesolowski2018; @MalariaGEN2023]. Large-scale sequencing initiatives have demonstrated that genome-wide variation captures relatedness gradients reflective of recent shared ancestry, enabling probabilistic inference of epidemiological connectivity across diverse endemic settings [@Daniels2015; @Taylor2017; @Zhu2022; @DiezBenavente2020].
+
+Despite these advances, a critical and underexamined question persists: under what biological and surveillance conditions can the genomic signal of recent transmission actually be detected? Most genomic transmission studies proceed under an implicit assumption that sufficient data collection and appropriate analytical tools will recove meaningful transmission signal [@Didelot2017; @Campbell2018]. Yet P. *falciparum* poses a uniquely challenging inferential environment. Obligate sexual recombination during reproduction in the mosquito midgut progressively erodes haplotype-level relatedness between co-transmitted parasite lineages, fragmenting shared ancestry into increasingly short and sparse genomic segments with each successive transmission cycle [@Conway1999; @Jiang2011; @Miles2016]. Polyclonal infections, in which a single human host carries genetically distinct parasite clones, further obscure pairwise genomic signals by introducing background relatedness that is difficult to separate from transmission-derived similarity [@Nkhoma2020; @Felger2012]. In endemic settings, high background relatedness arising from population structure and ongoing gene flow compounds these difficulties [@ferreira2007; @chenet2012; @AmambuaNgwa2019]. Together, these features suggest that the limits of transmission signal detection in malaria are not merely methodological, but biological.
+
+The critical gap in the existing literature is the absence of a principled characterisation of when the genomic signal of recent transmission transitions from detectable to undetectable, independent of the inference approach applied. Prior work has established that genomic relatedness statistics can capture epidemiological connectivity under favourable conditions [@Daniels2015; @taylor2017; @wong2017; @Henden2018], and that their performance degrades under high recombination or complex population structure [@schaffner2018; @Speed2015]. However, these studies evaluate performance relative to inferred proxies or incomplete empirical benchmarks, without access to known transmission ground truth, making it difficult to determine whether inference failure reflects signal absence or analytical inadequacy [@Didelot2021; @Albers2020]. As a result, the parameter space in which transmission detection is biologically feasible and the boundaries where it collapses regardless of analytical choice remains uncharacterised.
+
+Here, we develop a simulation-based framework to map the detectability landscape of recent *P. falciparum* transmission connectivity across the key biological and surveillance dimensions that govern signal availability. Using forward-time simulations with complete genealogical ground truth [@haller2019; @Kelleher2018], we define transmission-linked ancestry precisely and quantify how it is transformed, preserved, degraded, or rendered indistinguishable from background as recombination rate, population structure, sampling intensity, and transmission window depth vary. Rather than comparing inference methods as competing approaches, we deploy three established genomic summary statistics, identity by descent estimated via hmmIBD [@schaffner2018], identity by state (IBS), and phylogenetic inference from maximum-likelihood trees [@Wong2025], as complementary instruments for probing the boundaries of detectable signal. Consensus failure across all three instruments is treated as evidence of a biological detectability limit, not a methodological one [@baumdicker2022; @Speed2015].
+
+By mapping when genomic data can and cannot recover evidence of recent transmission connectivity, this study reorients malaria genomic epidemiology around a question that precedes the choice of analytical method: does the signal exist? The boundaries delineated here define realistic expectations for genomic transmission surveillance, clarify the conditions under which investment in sequencing and analysis is likely to return informative results, and provide a biologically grounded framework for interpreting relatedness patterns in field-collected parasite genomes. Rather than proposing a new inference method, we establish the biological parameter space within which any method can succeed and quantify how rapidly that space contracts as recombination, sampling constraints, and transmission complexity increase.
+
+## A staged simulation framework for quantifying genomic identifiability limits under controlled biological and surveillance variation
+
+In malaria, transmission occurs through *Anopheles* mosquitoes whose movements and infection histories are not individually tracked. This vector-mediated biology means that genomic ancestry observed in human infections reflects population-level mixing rather than discrete person-to-person transmission chains, rendering direct reconstruction of "who infected whom" from sequence and/or epidemiological data largely intractable. Rather than attempting to recover individual transmission events, the analyses that follow quantify the conditions under which genomic data can accurately recover transmission linked ancestry across varying biological and surveillance constraints. To this end, we constructed a simulation framework coupling three scenario blocks, a baseline biological regime, a recombination rate sweep, and a structured multi-population demography with a staged genomic simulation pipeline and a multi-method inference layer evaluated against ground-truth IBD using precision, recall, F1 and area under the precision-recall curve (AUPRC) (**Fig. 1**). This design ensures that observed limits on recoverability are attributable to biological and demographic parameters rather than to differences in analytical procedure. Simulation parameters for all three scenarios are summarized in **Supplementary Table S1**. The bottleneck effect on inference performance is characterized separately in **Supplementary Figure S1**, which shows that variation in effective population size at the demographic bottleneck (Ne = 1,000 to 20,000) produces AUPRC differences of 0.011–0.014 across methods at medium recombination, within the confidence interval range and substantially smaller than the effects attributable to recombination rate variation.
+
+\vspace{5mm}
+
+![](../results/main/figure1_framework.png)
+
+***Figure 1**. Overview of the simulation scenarios, genomic data generation, and inference evaluation framework used for transmission evaluation. The figure summarizes the end-to-end framework linking simulated epidemiological scenarios to genomic inference and performance evaluation. The figure outlines the conceptual and computational structure used to evaluate limits of genomic transmission identifiability. The left column defines the scenario space explored, including a baseline biological setting, a recombination-rate sweep, and structured multi-population models with migration. The central column depicts the simulation pipeline, from forward-time simulations with pedigree and tree-sequence recording, through tree-sequence processing and mutation overlay, to generation of genome-wide variant data. The right column summarizes the inference layer, distinguishing between ground-truth ancestry (true identity by descent (IBD)), genomic summaries derived from observable data (inferred IBD, identity by state (IBS), and phylogenetic cophenetic distances from maximum-likelihood trees), and downstream evaluation framework based on precision, recall, and F1 metrics.*
+
+\newpage
+
+# **Results**
+
+## **1. Transmission-linked parasite pairs retain only partial genealogical separation, establishing a biological ceiling on detectable signal.**
+
+Before any inference layer is applied, the most fundamental question for transmission detectability is whether the biological system produces meaningfully distinct genealogical signals between directly linked and unrelated parasite pairs. We addressed this by examining the distribution of true coalescence times (TMRCA) between transmission-linked pairs (direct descendants within a defined generational window, G ≤ 25) and epidemiologically unrelated pairs (non-direct) under baseline simulation parameters.
+
+A prerequisite for any genomic method to distinguish transmission-linked pairs from unlinked pairs is that the two classes occupy separable regions of the genomic signal space. We examined this prerequisite using the distribution of true pairwise coalescence times (TMRCA) under the baseline and recombination sweep scenarios (Figure 2). In both scenarios, direct transmission pairs (orange) display a distribution shifted toward shorter TMRCA values relative to non-direct pairs (blue), consistent with more recent common ancestry. However, the distributions overlap considerably across the full range of TMRCA values observed, with non-direct pairs contributing substantial density at low TMRCA values in both scenarios.
+
+Under the baseline scenario, direct pairs cluster below approximately 50 generations, but the tail of the non-direct distribution extends well into this range, producing a region of irreducible overlap. This overlap is at least as pronounced in the recombination sweep scenario, where both distributions appear broader and their modes more similar. The degree of overlap in TMRCA space does not markedly increase with elevated recombination rate alone, suggesting that the biological challenge of separation is present even before accounting for the additional distortion introduced by the inference process. Together, these distributions establish that the genomic signal separating direct from non-direct transmission is inherently limited in this pathogen system, and that any classifier operating on this signal will face a non-trivial false positive burden regardless of method choice.
+
+
+\vspace{5mm}
+
+![](../results/main/figure2_tmrca_distribution.png)
+
+***Figure 2:** True coalescence time (TMRCA) distributions for directly and non-directly transmitted parasite pair classes. Left: baseline simulation parameters. Right: recombination sweep condition. In both panels, direct pairs (red) are concentrated at shallow genealogical depths (G < 5), while non-direct pairs (grey) are broadly dispersed across the full window. Overlap in the G = 3–15 range is present under both conditions and is not eliminated by any parameter setting examined. The overlap region represents the irreducible biological floor on transmission detectability, the fraction of genealogical signal that is inherently ambiguous regardless of inference approach.*
+
+## **2. Recombination progressively erodes the genomic signal of shared ancestry, widening the gap between available and recoverable transmission informatione**
+
+To assess how recombination constrains the recoverability of transmission-linked signal, we compare true identity by descent with its hmmIBD-inferred counterpart [@schaffner2018] across four recombination regimes (**Figure 3**). At the lowest recombination rate (r = $10^{-9}$), true IBD proportions are high and broadly distributed across pairs, consistent with limited opportunity for recombination to fragment shared chromosomal segments (**Figure 3A**). The bimodal structure of this distribution, with a large mass of pairs at low IBD and a distinct tail of transmission-linked pairs near 1.0, is shown in detail at baseline conditions in **Supplementary Figure S1**. As recombination rate increases toward $10^{-6}$, distributions shift downward and compress, reflecting a progressive reduction in the extent of contiguous shared ancestry present in the true genealogical record.
+
+A qualitatively similar but accelerated decline is observed for inferred IBD (**Figure 3B**). At low recombination rates, inferred proportions span a wide range and overlap with the upper portion of the true IBD distribution. With increasing recombination, inferred values contract more rapidly than true IBD, indicating that shorter or more fragmented shared segments are recovered with decreasing consistency from sequence data. **Supplementary Figure S1** illustrates this recovery failure directly at baseline: hmmIBD recovers almost none of the high-IBD tail that is present in the true genealogical distribution, even at the lowest recombination rate examined.
+
+The mean trajectories in **Figure 3C** make the divergence between true and inferred IBD explicit: both series decay monotonically with increasing recombination rate, but the decline in inferred IBD is steeper. At intermediate recombination rates the gap between true and inferred means widens, and at the highest rates inferred IBD is compressed toward the lower boundary of the observed range while true IBD remains substantially elevated, reflecting residual shared ancestry that is no longer detectable at the segment level.
+
+The correlation between true and inferred IBD (**Figure 3D**) reinforces this pattern. Correlation is highest at r = $10^{-9}$, where inferred IBD reliably tracks variation in true shared ancestry across pairs, reaching values of approximately 0.85–0.90. It declines overall with increasing recombination rate, reaching values near 0.50–0.55 at r = $10^{-6}$, indicating that beyond a threshold recombination regime variation in true IBD is only weakly reflected in inferred estimates. This limits the identifiability of transmission-linked ancestry even when genuine shared ancestry remains present in the underlying genealogy.
+
+\vspace{5mm}
+
+![](../results/main/figure3_ibd_recombination.pdf)
+
+***Figure 3**: Effect of recombination rate on the availability and recoverability of transmission signal. A) Distribution of true IBD proportions for direct and non-direct pairs across recombination rates, the available signal ceiling at each rate. B) Inferred IBD proportions (hmmIBD) at the same rates, the recoverable signal floor. C) Divergence between mean true and inferred IBD as a function of recombination rate, illustrating the recovery gap. D) Pearson correlation between true and inferred IBD, showing the non-monotonic recovery efficiency curve that peaks at r ≈ $10^{-7}$ and declines at both extremes. Note that panels A and B represent two layers of the same biological system, what genome biology provides and what sequence-based inference can recover from it, not a comparison between methods.*
+
+## **3. Transmission detection undergoes a threshold transition governed by recombination rate, independent of inference approach.**
+
+Panel A shows precision–recall curves for IBD, IBS, and Phylo in three separate facets corresponding to the Baseline, Recombination sweep, and Migration scenarios. In the Baseline facet, IBD occupied the highest position in the precision–recall space, maintaining precision values of approximately 0.25–0.30 at Recall = 0.5 before declining toward zero by Recall ≈ 0.8–0.9. IBS was positioned below IBD across the full recall range, with a comparable declining shape. Phylo showed the steepest decline of the three approaches, falling below IBS above Recall ≈ 0.05 and reaching near-zero precision at recall levels where IBD and IBS retained measurable values. All three curves converged at low precision near Recall = 1.0. In the Recombination sweep facet, all three curves shifted downward relative to Baseline. Precision values at any given recall level were reduced for all approaches compared to the corresponding Baseline curves, and the Phylo curve was nearly flat at precision values of 0.05–0.10 across most of the recall range. The upper-left region of the precision–recall space — high precision at low recall — was visibly less occupied under the sweep than at Baseline. The gap between IBD and IBS was narrower under the sweep than at Baseline. In the Migration facet, curve positions were comparable to those in the Baseline facet, with IBD highest, IBS intermediate, and Phylo lowest, and no systematic upward or downward displacement relative to Baseline. Panel B shows F1 score on the y-axis (range 0.0–0.6) against recombination rate on the x-axis (log scale: 1 × 10^-9, 1 × 10^-8, 1 × 10^-7, 6.67 × 10^-7, 1 × 10^-6) for all three methods across the three scenarios, yielding nine lines in total differentiated by colour (method) and line type (scenario). At recombination rates of 1 × 10^-9 and 1 × 10^-8, all nine lines converged in the range F1 = 0.00–0.07, with no line exceeding F1 = 0.10 at either rate. Lines were indistinguishable across methods and scenarios within this recombination range. Between r = 1 × 10^-8 and r = 1 × 10^-7, F1 scores increased sharply for IBD and IBS under the Baseline and Migration scenarios, while the Recombination sweep lines for both methods showed a smaller and later inflection over the same interval. The Phylo inflection across this range was smaller and less steep than for IBD or IBS under all three scenarios.
+At r = 6.67 × 10^-7, IBD under Baseline and Migration reached F1 ≈ 0.50–0.55, IBS reached F1 ≈ 0.35–0.45, and Phylo reached F1 ≈ 0.15–0.25. Recombination sweep lines were positioned below the corresponding Baseline lines for all three methods at this rate. Migration lines tracked closely to Baseline lines within each method. At r = 1 × 10^-6, IBD Baseline and Migration lines reached the highest F1 values observed across all conditions (≈ 0.55–0.60), while IBS reached ≈ 0.45–0.50 and Phylo ≈ 0.20–0.30. The gap between Recombination sweep and Baseline lines was widest for IBD at r = 1 × 10^-6. Method separation — the vertical distance between IBD, IBS, and Phylo lines — was greatest at the two highest recombination rates and was not detectable at r ≤ 1 × 10^-8.
+
+\vspace{5mm}
+
+![](../results/main/figure4_f1_recombinations.pdf)
+
+***Figure 4:** Recombination-governed phase transition in transmission detection. A) Precision–recall curves for all three approaches under baseline, recombination sweep, and full factorial conditions, presented as the outer achievable precision–recall envelope rather than a method comparison. The progressive contraction of this envelope with increasing recombination characterises the shrinking of accessible precision-recall space as the biological signal degrades. B) F1 score as a function of recombination rate for all three inference approaches under baseline parameters. The near-zero plateau at r ≤ $10^{-8}$ and sharp rise above r = $10^{-7}$ define the biological detection threshold. The synchronous collapse of all approaches below this threshold indicates a biological rather than methodological limit.*
+
+## **4. The detection threshold reflects coalescent geometry: genealogical overlap between transmission classes constrains all sequence-based representations.**
+
+To assess the intrinsic separability of transmission classes in genealogical and distance-based genomic space, we compare distributions of true coalescent times and corresponding cophenetic distances for direct transmission pairs, broader transmission-linked pairs (all pairs within the G-window, hereafter referred to as Transmission), and non-linked pairs, under baseline and recombination sweep conditions (**Figure 5**). This classification reflects the distinction between immediate transmission events (Direct), all genomically proximate pairs captured by the transmission window (Transmission), and background unrelated pairs (Non-direct). Under the baseline scenario, direct pairs are shifted toward lower cophenetic distances relative to non-direct pairs, consistent with their more recent coalescence. Despite this shift, the distributions overlap substantially, with non-direct pairs extending into the low-distance range occupied by direct transmissions. Under the recombination sweep, the distributions of both classes remain overlapping, and the separation between them does not clearly increase relative to the baseline, indicating that higher recombination does not systematically improve phylogenetic inference discriminability between transmission classes.
+
+Differences between direct and non-direct pairs that are present at the genealogical level are consequently attenuated in phylogenetic inference, and the density overlap between transmission classes is substantial across both scenarios. These distributions establish that the limited separability of direct and non-direct transmission pairs in phylogenetic space is not solely an artefact of inference: it is partly present in the underlying genealogy and is further compressed by the mapping from coalescent time to cophenetic distance. This genealogical overlap defines a ceiling on the identifiability of transmission links from distance-based summaries, independent of the threshold or method applied.
+
+![](../results/main/figure5_phylogenetic_distances.pdf)
+
+***Figure 5:** Distributions of cophenetic distances for direct and non-direct transmission pairs under baseline and recombination sweep scenarios. Cophenetic distance (x-axis, range 0–0.75) is plotted against density (y-axis) for direct transmission pairs and non-direct pairs. Overlap is greater for cophenetic distances than for TMRCA values, demonstrating that the phylogenetic representation loses resolution relative to the underlying genealogy. The recombination sweep further compresses this separation.*
+
+## **5. Population structure modulates but cannot override the recombination-governed detectability ceiling.**
+
+To determine whether population structure and migration impose constraints on transmission link recoverability that are independent of recombination, we examined AUPRC across the joint space of recombination rate and migration rate for all three inference layers at G ≤ 25 generations (**Figure 6**). Across all migration rates, AUPRC increases monotonically with recombination rate for every method, recapitulating the pattern observed in the single-population analyses. IBD AUPRC rises from 0.48–0.51 at $10^{-9}$ to 0.71–0.72 at $10^{-6}$, IBS from 0.31–0.33 to 0.62–0.64, and Phylo from 0.25–0.26 to 0.59–0.61, with the rank ordering IBD > IBS > Phylo maintained at every recombination–migration combination (**Figure 6A-D**, **Supplementary Table S2**).
+
+Migration rate exerts a substantially smaller effect on AUPRC than recombination rate. At high recombination ($10^{-6}$), mean IBD AUPRC ranges from 0.709 to 0.722 across migration rates of 0.05 to 0.001, a difference of 0.013. The equivalent range attributable to recombination within a fixed migration condition spans approximately 0.23 AUPRC units for IBD and 0.35 for Phylo (**Figure 6D**). This difference in effect magnitude is consistent across all panels, the vertical separation between migration rate curves within each method is narrow relative to the slope of AUPRC across recombination rates. The effect of migration is most visible for IBS and Phylo at low recombination rates, where AUPRC values are compressed near the floor and small absolute differences are proportionally more meaningful. 
+
+The gradient plot (**Figure 6E**) makes the dominant role of recombination rate explicit. For all three methods and all three migration levels, mean AUPRC rose steeply from r = $10^{-9}$ to r = $10^{-8}$ and then continued to increase more gradually through r = $10^{-7}$ to r = $10^{-6}$. Lines representing different migration rates were nearly indistinguishable within each method across the full recombination range, running in close parallel with overlapping confidence ribbons, while the separation between methods was visible and consistent at every point along the recombination axis. At a lower recombination rate, IBD averaged 0.491 versus 0.323 for IBS and 0.253 for phylogenetic patristic distances; at r = $10^{-6}$ these values rose to 0.714, 0.623, and 0.600 respectively. The absolute gap between IBD and the other methods remained larger at the low end of the recombination range than at the high end, consistent with the non-monotonic advantage profile observed across all scenarios. At no point in the gradient plot did migration rate variation produce line crossings or rank reversals between methods, confirming that the method hierarchy documented in Panels A–D is stable across the full joint space of migration and recombination examined.
+
+\vspace{5mm}
+
+![](../results/main/Figure6_migration_redesigned.pdf)
+
+***Figure 6:** Comparative recoverability of transmission links across migration and recombination rate conditions for IBD, IBS, and Phylo methods, restricted to G ≤ 25 generations. Panels A–D show mean AUPRC (± 95% CI) across three migration rates (0.001, 0.01, 0.05) at recombination rates of $10^{-9}$ (A), $10^{-8}$ (B), $10^{-7}$ (C), and $10^{-6}$ (D). Panel E displays the AUPRC gradient as a function of recombination rate, with lines representing each migration rate and method combination, summarizing the joint effect of recombination and migration on transmission recoverability across the full parameter space tested. Error ribbons represent 95% confidence intervals.*
+
+## **6. Surveillance design shapes detectability within the biological boundary but cannot transcend it.**
+
+To synthesise the limits established across preceding analyses, we mapped the best achievable AUPRC across all methods jointly as a function of recombination rate, migration rate, and sample size at G ≤ 25 generations (**Figure 7**). The phase diagram reveals a structured partition of the parameter space into three regions that differ qualitatively in the recoverability of transmission links.
+
+The first region is a non-identifiable floor defined entirely by recombination rate. At r = $10^{-9}$, the best achievable AUPRC across all methods, migration rates, and sample sizes ranges from 0.53 to 0.62, with no condition exceeding 0.62 regardless of demographic or surveillance configuration. This floor is insensitive to migration rate and sample size, confirming that the absence of recombination-driven differentiation constitutes an absolute biological barrier to transmission link recovery that cannot be compensated by demographic or surveillance design (**Figure 7A-C**). The floor persists regardless of which inference layer is applied, consistent with the signal depletion documented in Figure 2 and the genealogical overlap shown in Figure 5.
+
+The second region is a transition zone at intermediate recombination rates (r = $10^{-8}$ to $10^{-7}$) where identifiability becomes achievable but remains sensitive to sample size. At r = $10^{-8}$, best AUPRC ranges from 0.65 to 0.76 depending on sample size, with values above 0.75 confined to n = 100. At r = $10^{-7}$, this range shifts upward to 0.71–0.83, with n = 100 reaching 0.76–0.83 across all migration rates (**Figure 7A-C**). Within this zone, migration rate exerts only modest influence: the best AUPRC at n = 100 and r = $10^{-7}$ differs by no more than 0.07 across the three migration values, confirming that population structure does not substantially shift the phase boundary within this recombination range.
+
+The third region is a high-identifiability zone at the highest recombination rate examined (r = $10^{-6}$). At n = 100, best AUPRC reaches 0.789–0.823 across all migration rates, with the AUPRC = 0.80 contour crossed at this sample size under all three migration conditions. As sample size increases, the high-identifiability zone contracts: at n = 200, mean best AUPRC falls to 0.762–0.793, and at n = 400 to 0.742–0.753, with no condition exceeding 0.80. This contraction with increasing sample size reflects the dilution of transmission-linked signal by the growing pool of unrelated pairs, a pattern consistent with the non-monotonic sampling effect. Across all recombination rates, IBD is the method that achieves the best AUPRC in every high-identifiability cell (Fig. 8B), with mean IBD AUPRC of 0.705–0.725 at r = $10^{-6}$ and n = 100 across migration conditions — values 0.07–0.09 above the next-best method at the same coordinates.
+
+![](../results/main/Figure7_detectability.pdf)
+***Figure 7**: Best AUPRC (maximum across IBD, IBS, and Phylo methods) as a function of recombination rate ($10^{-9}$ to $10^{-6}$) and sample size (n = 100, 200, 400) under three migration rates: migration = 0.001 (A), 0.01 (B), and 0.05 (C), restricted to transmission events within G ≤ 25 generations. Cell values report mean AUPRC across replicates. D) shows the IBD advantage over the next-best method (AUPRC gap = IBD − max(IBS, Phylo)) across the recombination-by-migration rate grid, aggregated over sample sizes.* The maximum achievable detectability across surveillance parameter space. Heatmaps of best AUPRC (maximum across all inference approaches) as a function of recombination rate and sample size under three migration conditions.
+
+To examine how the temporal depth of the transmission window (G threshold) interacts with sample size in shaping AUPRC, performance was evaluated across G thresholds from G=1 to G=25 at sample sizes of n=100, 200, and 400 for all methods (**Figure 8**). The G-threshold gain curves and per-method heatmaps (**Figure 8A–D**) decomposed these trends across the recombination rate axis. For IBD, AUPRC increased with G threshold at all recombination rates, but the gain was most pronounced at higher recombination rates: from 0.46 at G=1 to 0.71 at G=25 at $10^{-6}$, compared to a more modest increase from 0.42 to 0.49 at $10^{-9}$ (**Figure 8**). IBS displayed a qualitatively distinct pattern at low recombination rates, where AUPRC declined from G=1 (0.39) to G=25 (0.32) at $10^{-9}$, while increasing substantially with G at higher rates, reaching 0.62 at G=25 and $10^{-6}$ (**Figure 8B**). Phylo showed the steepest G-associated deterioration at low recombination, falling from 0.42 at G=1 to 0.25 at G=25 at $10^{-9}$, while closely tracking IBS performance at higher recombination rates (**Figure 8C**). The gain curves in panel D, averaging across migration and sample size conditions, summarized these divergent trajectories: at high recombination rates ($10^{-7}$ and $10^{-6}$), all three methods showed a consistent positive AUPRC gain with increasing G, whereas at $10^{-9}$ IBD remained flat, IBS and Phylo declined, and method separation was most pronounced at G=25. Together, these patterns indicate that expanding the generational window improves recoverability conditionally on sufficient recombination, and that IBD is the least sensitive to G-threshold-induced performance degradation under low recombination regimes.
+
+Similarly, at the narrowest transmission window (G=1), all three methods displayed the highest absolute AUPRC values at n=100, reaching approximately 0.52–0.69, followed by a steep and monotonic decline with increasing sample size to approximately 0.31–0.36 at n=400; confidence intervals were relatively narrow and method trajectories remained closely clustered **Supplementary Figure S9**. As G increased from 1 to 5, the negative sample size gradient attenuated across all methods, with AUPRC values converging toward approximately 0.40–0. 45 across the n=100 to n=400 range, and IBD retaining a modest but consistent advantage over IBS and Phylo. At G thresholds of 10 and above, a qualitative shift in the sample size relationship emerged: the monotonically decreasing pattern gave way to a non-monotonic profile in which n=200 produced AUPRC values equal to or exceeding those at n=100, most prominently for IBD at G=15 and G=25, where n=200 reached approximately 0.59–0.70 compared to approximately 0.46–0.50 at n=100. Confidence intervals widened substantially at G=15 and G=25, particularly for IBD and Phylo, indicating increased variability in performance under broad generational windows.
+
+![](../results/main/Figure8_G_threshold_interaction.pdf)
+
+***Fig 8:** Mean AUPRC (± 95% CI) as a function of sample size (n = 100, 200, 400) across six generational depth thresholds (G = 1, 3, 5, 10, 15, 25) for IBD (orange), IBS (blue), and Phylo (green), averaged across recombination and migration rate conditions. Each panel corresponds to a distinct G threshold. Shaded bands denote 95% confidence intervals across simulation replicates.*
+
+
+## **7. The detectability landscape defines a constrained but navigable parameter space for malaria genomic surveillance.**
+
+Figure 8 integrates the simulated detectability landscape with empirical observations from the Gambian field dataset, presented across three panels: best AUPRC heatmaps across the simulated parameter space (Panel A), a comparison of observed and simulated AUPRC values (Panel B), and pairwise IBD proportion distributions from the empirical data (Panel C). Panel A. Three heatmap facets show best AUPRC — the maximum across all inference approaches at each parameter combination — as a function of recombination rate (x-axis, log scale: 1 × 10^-9 to 1 × 10^-6) and sample size (y-axis: 100–400, with 100 at the bottom) under migration rates of 0.001, 0.01, and 0.05. The colour scale runs from green (AUPRC ≈ 0.5) through yellow (≈ 0.7) to orange (≈ 0.8–0.85); the warmest colours visible in the figure are orange, concentrated in the n = 100 row at r = 1 × 10^-6.
+Across all three facets, the columns corresponding to r = 1 × 10^-9 and r = 1 × 10^-8 were uniformly green regardless of sample size or migration condition, with best AUPRC values at or below approximately 0.60. At r = 1 × 10^-7, cells were light green to yellow, with slightly warmer colours at smaller sample sizes. At r = 1 × 10^-6, a clear within-column gradient was visible: n = 100 cells showed orange colouring across all three migration panels, while n = 400 cells were light green to yellow. This gradient along the sample size axis at r = 1 × 10^-6 was present in all three migration facets. The dominant colour gradient across each panel ran along the recombination rate axis rather than the sample size axis.
+Dashed contour overlays were present in two of the three facets. In the Migration = 0.001 panel, a partially open dashed arc was visible in the r = 1 × 10^-6 column, spanning approximately n = 100–175. In the Migration = 0.05 panel, two dashed arcs were visible: one spanning approximately n = 150–200 at r = 1 × 10^-7, and a second at r = 1 × 10^-6 over a similar sample size range, together forming a larger region. No dashed contours were present in the Migration = 0.01 panel. Panel B. The dot-plot shows AUPRC on the x-axis (range 0.0–0.6) for IBD (top row, orange), IBS (middle row, blue), and Phylo (bottom row, green). A vertical dashed line at x ≈ 0.01–0.02 indicates the random baseline corresponding to the class prevalence in the empirical dataset. For each method, two glyphs are shown: a filled circle with confidence interval whiskers for the observed (Gambian field data) AUPRC, and a shaded rectangle with a central vertical line for the simulated AUPRC (mean ± 95% CI at matched parameters). Observed AUPRC values were positioned at x ≈ 0.03 for IBD and IBS and at x ≈ 0.01–0.02 for Phylo, with all three observed points clustered within x = 0.01–0.05. Confidence interval whiskers for all three observed values were narrow. Simulated AUPRC values were substantially to the right of the observed values: IBD simulated mean ≈ 0.55 (95% CI ≈ 0.50–0.65), IBS mean ≈ 0.42 (95% CI ≈ 0.37–0.48), and Phylo mean ≈ 0.22 (95% CI ≈ 0.15–0.27). There was no overlap between the confidence interval whiskers of any observed point and the shaded band of the corresponding simulated distribution. The rank order of simulated values (IBD > IBS > Phylo) was preserved in the observed values, with IBD and IBS observed AUPRC values nearly coincident and Phylo slightly lower. Panel C. The density plot shows pairwise IBD proportions (x-axis: 0.2–0.8; y-axis: density 0–35) for different-household pairs (grey, n = 12,562) and same-household pairs (orange, n = 158). Two vertical dashed lines are shown: a dark dashed line at IBD proportion ≈ 0.235 and a red dashed line at ≈ 0.245, positioned within the peak region shared by both distributions. The different-household distribution showed a sharp, tall peak at IBD proportion ≈ 0.23–0.24, with peak density near 35 and negligible mass above IBD ≈ 0.28–0.30. The same-household distribution showed a peak at the same IBD proportion range, with a comparable but slightly lower peak density of approximately 28–30. The same-household distribution also showed a sparse right tail extending from approximately 0.30 to 0.80, with low but non-zero density at scattered values across this range; no corresponding mass was present in the different-household distribution at these IBD values. The two dashed vertical lines — the distribution medians — were separated by approximately 0.01 IBD units and both fell within the shared peak region of the two distributions. The bulk of both distributions occupied the same narrow IBD range near 0.23–0.24, with the same-household distribution distinguished only by its sparse right tail.
+
+![](../results/main/Figure9_validation.pdf)
+
+**Figure 9**: Detectability phase diagram: the achievable parameter space for malaria genomic transmission surveillance. Best AUPRC heatmaps (maximum across inference approaches) as a function of recombination rate (x-axis, log scale) and sample size (y-axis) under migration rates of 0.001, 0.01, and 0.05 (separate facets). Colour scale: green ≈ 0.5 to orange ≈ 0.8–0.85. Uniformly low AUPRC at r ≤ 1 × 10^-8 across all sample sizes; highest AUPRC at r = 1 × 10^-6 and n = 100. Dashed contour overlays in Migration = 0.001 and Migration = 0.05 panels indicate the position of the empirical Gambian dataset within the simulated parameter space. (B) Observed (filled circles with 95% CI whiskers) and simulated (shaded rectangles with central line = mean, width = 95% CI) AUPRC for IBD, IBS, and Phylo. Vertical dashed line = random baseline (class prevalence). Observed values clustered at AUPRC ≈ 0.01–0.05 for all three methods; no overlap between observed CIs and simulated CIs for any method. Rank order of AUPRC preserved between observed and simulated values (IBD ≥ IBS > Phylo). (C) Pairwise IBD proportion distributions for different-household (grey, n = 12,562) and same-household (orange, n = 158) pairs in the Gambian dataset. Dashed vertical lines = distribution medians (dark ≈ 0.235, red ≈ 0.245). Both distributions share a narrow peak at IBD ≈ 0.23–0.24; same-household pairs show a sparse right tail (IBD 0.30–0.80) absent from the different-household distribution.*
+
+\newpage
+# Discussion
+
+## Genomic identifiability as a constrained property of malaria transmission systems
+
+Genomic data are increasingly used to infer malaria transmission patterns, often with the implicit assumption that sufficient resolution exists to reconstruct who infected whom, or at least to recover fine-scale transmission links. The analyses presented here show that such resolution is not guaranteed. Instead, the identifiability of transmission relationships emerges as a constrained property of the biological system and the surveillance process, shaped by recombination, migration, sample size, and generational depth acting as secondary modulators — carries substantial implications for both the theoretical framework of genealogical inference and the practical deployment of genomic epidemiology tools in malaria-endemic settings. Across all evaluated conditions, IBD-based inference consistently outperformed IBS and phylogenetic approaches, and the recombination rate emerged as a near-deterministic ceiling on recoverability that no combination of population structure or sample size could overcome. These results extend and sharpen a growing consensus in the pathogen genomics literature, while revealing important boundaries that previous work has not fully characterized. Rather than reflecting shortcomings of specific analytical approaches, the observed limits arise from fundamental mismatches between transmission-linked ancestry and what can be recovered from realistic genomic data.
+
+The primacy of recombination in shaping genealogical signal is theoretically well-grounded. In sexually reproducing organisms such as P *falciparum*, recombination during meiosis in the mosquito midgut progressively erodes the haplotype-level relatedness between co-transmitted parasite lineages, fragmenting IBD segments into shorter tracts with each successive transmission generation. This process mirrors the theoretical expectations derived from the coalescent framework, wherein the expected length of shared haplotype blocks decays approximately as a function of both recombination rate and generations since common ancestry. Our observation that AUPRC peaked at intermediate recombination rates under direct IBD inference — and that F1 scores remained near zero below 1×10⁻⁷ per base pair — is broadly consistent with simulation studies by Henden et al. (2018) and Syding et al. demonstrating that IBD segment detection rapidly loses power when segment lengths fall below caller detection thresholds. However, the near-complete identifiability collapse observed here at the lowest recombination rates, where sensitivity was paradoxically highest at 90% specificity yet AUPRC remained low, underscores a subtler theoretical point: high raw sensitivity in a low-recombination regime reflects inflated positive predictions across an undifferentiated landscape of long shared haplotypes, rather than genuine discriminative power. This distinction between sensitivity and calibrated precision-recall performance has been underappreciated in previous applications of IBD-based relatedness to transmission inference.
+
+The comparative underperformance of phylogenetic inference across most conditions aligns with longstanding critiques of tree-based transmission reconstruction in recombining organisms. Phylogenetic methods assume a clonal or near-clonal evolutionary history, an assumption that is progressively violated as recombination erodes the shared genealogical signal between direct transmission pairs. The observed convergence of Phylo with IBD and IBS at the highest recombination rates is somewhat counterintuitive, but can be reconciled by the fact that high recombination fragments genomic ancestry in ways that may reduce confounding by deep shared genealogy, making cophenetic distances more locally informative. This is consistent with observations from HIV and tuberculosis transmission studies where phylogenetic clustering becomes more reliable when within-host diversity is low and evolutionary rates are high — conditions that functionally parallel a high-recombination, short-segment regime in malaria. Nevertheless, Phylo's persistent failure to achieve identifiable status across any recombination-migration-sample size combination tested here suggests that tree-based approaches face a fundamental structural limitation for *P. falciparum* transmission reconstruction that cannot be resolved by parameter optimization alone.
+
+The finding that increasing sample size reduced rather than improved best AUPRC is one of the more striking and practically consequential results of this study. This inverse relationship likely reflects a dilution effect: as sample size grows, the ratio of true transmission pairs to background unrelated pairs decreases sharply in the absence of targeted sampling, increasing the effective class imbalance and penalizing precision in the AUPRC metric. This interpretation is supported by the attenuation of the negative sample size gradient at higher G thresholds, where the transmission pair pool is larger and dilution is partially offset by temporal accumulation. This result stands in partial contrast to findings from SARS-CoV-2 genomic contact tracing studies, where larger sample sizes consistently improved network reconstruction accuracy; however, those analyses operated in effectively clonal pathogen populations where relatedness gradients were steeper and background identity rates were lower, making the comparison imperfect. For malaria specifically, the implication is that targeted or stratified sampling frameworks — prioritizing epidemiologically linked individuals — may be more effective than broad population-level sequencing campaigns for transmission inference purposes, a practical consideration that has been advocated on epidemiological grounds but not previously quantified in terms of AUPRC performance.
+
+The robustness of IBD-based inference to migration-induced population structure, observed consistently across migration rates spanning two orders of magnitude, represents a meaningful advance over previous assessments that treated population subdivision as a primary confound for relatedness-based methods. The finding that migration rate shifted AUPRC by at most ~0.03–0.04 units within any recombination stratum supports the view that shared ancestry arising from ongoing gene flow is largely distinguishable from recent transmission-derived IBD, at least within the 25-generation window examined here. This is theoretically consistent with the expectation that migration-derived relatedness manifests as shorter, more diffuse IBD segments compared to the longer tracts expected from recent common transmission ancestry, and with empirical observations from East African *P. falciparum* populations where moderate migration did not substantively distort IBD-based relatedness networks.
+
+Several limitations of the present study warrant careful consideration. First, the simulations assumed a simplified two-population demographic model with constant migration rates, which may not capture the spatial heterogeneity, seasonal transmission dynamics, or complex metapopulation structure characteristic of real malaria-endemic settings. The extent to which identifiability ceilings shift under more realistic demographic histories — including population expansions, bottlenecks driven by seasonal transmission intensity, or spatially structured networks — remains an open empirical question. Second, the analysis fixed genotyping error rates and assumed complete genome-wide coverage, conditions that are rarely met in field sequencing data where missingness, allele dropout, and error rates vary across genomic regions and samples. IBD caller performance is known to degrade under realistic genotyping uncertainty, and the absolute AUPRC values reported here should therefore be interpreted as upper bounds relative to field applications. Third, the G threshold analysis revealed substantially widened confidence intervals at G=15 and G=25, suggesting that performance estimates in broad generational windows are sensitive to stochastic variation in genealogical structure across replicates, and that practical applications requiring retrospective inference over multi-generational timescales will face higher uncertainty than the mean estimates suggest.
+
+Future research should prioritize three directions that follow directly from these findings. First, empirical validation of the recombination-driven identifiability ceiling using field-collected P. *falciparum* whole-genome sequence data from settings with known epidemiological transmission networks such as household cohort studies or hospital-linkage datasets would establish whether the simulated performance gradients hold under biological and logistical complexity. Second, the development of hybrid inference frameworks that integrate IBD segment statistics with population genetic covariates accounting for local recombination rate variation and demographic history could narrow the performance gap at low recombination rates, where all current methods show the greatest deficit. Third, systematic investigation of targeted sampling designs, varying the ratio of epidemiological linked to background samples, would directly address the sample size paradox observed here and provide actionable guidance for study design in future genomic transmission surveillance programs.
+
+Consistency of these simulation-derived bounds with empirical data was confirmed using [n] P. falciparum WGS samples from The Gambia, where same-household proximity served as an epidemiological transmission proxy. Real-data AUPRC values for all three methods fell within or below the simulated 95% confidence intervals at biologically matched parameter settings, with the method ranking (IBD > IBS/Phylo) preserved, supporting the interpretation that simulated performance gradients represent realistic upper bounds for field genomic surveillance.
+
+# Limitations and scope
+
+This study focuses on controlled simulation scenarios designed to isolate key drivers of identifiability. While these scenarios capture essential features of malaria biology, real-world systems may exhibit additional complexities, including heterogeneous sampling, mixed infections, and within-host diversity. These factors are likely to further constrain identifiability rather than relax it. As such, the limits identified here should be interpreted as optimistic bounds under idealized surveillance, reinforcing the need for cautious interpretation of genomic transmission inferences.
+
+---
+A further limitation of the present study is that all simulations were conducted on a single chromosome (chromosome 1, 640,851 bp). Plasmodium falciparum has 14 chromosomes with substantial heterogeneity in recombination rate, GC content, and functional constraint across the genome. In particular, telomeric and subtelomeric regions harboring hypervariable antigen gene families (var, rifin, stevor) violate the neutral evolution assumptions of both the simulation model and hmmIBD, and are typically excluded from relatedness analyses in practice. Chromosomes also differ in effective length and recombination landscape, which will produce chromosome-specific AUPRC values around the genome-wide average reported here. The use of a single chromosome means that the IBD accumulation across multiple independent loci — which would tend to improve discriminative power at intermediate recombination rates — is not captured. As a result, the AUPRC values reported here are likely conservative relative to a full genome-wide analysis at high recombination rates (where multi-chromosome IBD accumulation would improve precision-recall balance), but may be optimistic relative to genome-wide analysis at very low recombination rates (where long-range linkage disequilibrium spanning chromosome 1 may inflate apparent IBD sharing between unrelated pairs). Genome-wide simulation extending across all 14 chromosomes with empirical recombination maps (Miles et al. 2016; MalariaGEN) represents an important direction for future work, and would permit direct calibration of the recombination-driven identifiability ceiling reported here against the full genomic architecture of P. falciparum."
+
+---
+
+# Conclusions
+
+By explicitly quantifying how biological processes and genomic representations constrain the recovery of transmission-linked ancestry, this study reframes malaria genomic epidemiology around the concept of identifiability. The results show that limits on transmission inference are often structural and unavoidable, arising before analytical choices are made. Recognizing and quantifying these limits is a necessary step toward realistic, robust use of genomic data in malaria transmission dynamics.
+
+The baseline simulation recombination rate of 6.67 × 10⁻⁷ bp⁻¹ gen⁻¹ corresponds closely to the empirical genome-wide average recombination rate estimated for P. falciparum from genetic cross data (approximately 7.4 × 10⁻⁷ bp⁻¹ per meiosis; Miles et al. 2016), placing the most practically relevant parameter regime within the identifiable region identified here (AUPRC 0.65–0.75 at n = 200–400).
+
+\newpage
+
+# Methods
+
+## Overview of the simulation framework
+
+We developed a comprehensive simulation framework to evaluate the accuracy of genomic methods for reconstructing Plasmodium *falciparum* transmission networks. Our approach integrates forward-time population genetic simulation using SLiM v4.0 (Haller & Messer, 2023) with coalescent-based genealogical reconstruction using msprime v1.2 (Kelleher et al., 2016) and tree sequence recording via pyslim v1.0 (Haller et al., 2019). This hybrid framework allows us to capture both the selective dynamics of recent parasite evolution and the deeper coalescent history while maintaining computational tractability for genome-scale simulations.
+
+We simulated three distinct scenarios to evaluate transmission inference under varying evolutionary conditions:
+
+1.  **Baseline scenario**: Fixed P. *falciparum* specific parameters representing typical endemic transmission \\
+2.  **Recombination sweep**: Systematic variation of recombination rates to assess the impact of within-host diversity on transmission reconstruction. \\
+3.  **Full parameter space**: Factorial exploration of recombination rate, transmission bottleneck size, mutation accumulation (expected substitutions per transmission, EST), sampling intensity, outbreak size, and population structure with migration. \\
+
+## Biological Model and Assumptions
+
+### Parasite Life Cycle and Reproductive Mode
+
+P. *falciparum* exhibits a complex haploid-diploid life cycle alternating between human and mosquito hosts. Our simulations explicitly model this biology with the following key assumptions:
+
+**Haploidy**: The parasite genome remains haploid throughout asexual replication in both human (liver and blood stages) and mosquito (sporozoite) hosts. Diploidy occurs only transiently during sexual reproduction in the mosquito midgut (zygote/ookinete stage), followed immediately by meiosis. We therefore model parasites as fundamentally haploid organisms (one genome copy per individual) with occasional outcrossing.
+
+**High selfing rate**: Following empirical estimates from endemic populations (Daniels et al., 2015), we set the selfing rate $\sigma = 0.95$ for baseline simulations. This reflects the predominantly clonal transmission of P. *falciparum* due to: low multiplicity of infection (MOI) in many endemic settings, temporal asynchrony of gametocyte production and stochastic sampling of gametocytes during mosquito blood meals.
+
+The effective outcrossing rate is thus $\tau = 1 - \sigma = 0.05$.
+
+**Discrete generations**: Each complete transmission cycle (human → mosquito → human) represents one discrete generation in our model. This comprises: - Human liver stage: 7-10 days (1 generation) - Human blood stage: 5 asexual replication cycles over \~10 days (5 generations) - Mosquito sexual stage: Gametocyte → ookinete (1-2 generations) - Mosquito asexual stage: Oocyst sporogony (8-10 generations) - Mosquito sporozoite migration: (1-2 generations)
+
+The total generation time per transmission event is approximately $g_{\text{trans}} = 22$ generations (range: 18-28 depending on infection duration), spanning 12-15 days of calendar time.
+
+### Transmission Bottleneck
+
+A critical feature of P. *falciparum* transmission is the severe genetic bottleneck occurring during mosquito-to-human transmission. When an infected mosquito takes a blood meal, only a small number of sporozoites successfully invade hepatocytes and establish blood-stage infection. We model this bottleneck explicitly with parameter $B$, representing the number of parasite genomes transmitted per infection event.
+
+We explore three bottleneck scenarios: \\ - **Tight bottleneck**: $B = 1$ (single parasite transmission, severe genetic drift) - **Moderate bottleneck**: $B = 5$ (few parasites, intermediate drift) - **Loose bottleneck**: $B = 20$ (multiple parasites, reduced drift)
+
+Empirical estimates suggest $B \approx 1-10$ in natural transmission (Schneider et al., 2018), making this a key parameter governing the correlation between genetic and epidemiological relationships.
+
+### Population Structure and Demography
+
+**Single-population (baseline) model**: We simulated a single panmictic population with an ancient effective population size: $N_e = 10,000$ (representing pre-bottleneck ancestral diversity) - Recent effective population size: $N_0 = 1,000$ (representing contemporary population) - Exponential population size change occurring at generation $g_{\text{change}} = 200$ before present:
+
+$$N(t) = N_0 \left(\frac{N_e}{N_0}\right)^{t/g_{\text{change}}}$$
+
+where $t$ represents generations before present ($0 \leq t \leq g_{\text{change}}$).
+
+**Multi-population (migration) model**: For the full parameter space exploration, we simulated $n = 3$ populations (demes) with symmetric migration at rate $m$ per generation. The migration matrix $\mathbf{M}$ is:
+
+$$M_{ij} = \begin{cases}
+1 - (n-1)m & \text{if } i = j \\
+m & \text{if } i \neq j
+\end{cases}$$
+
+We explored three migration scenarios:
+
+-   Low gene flow: $m = 0.001$ (1 migrant per 1000 generations)
+-   Moderate gene flow: $m = 0.01$ (1 migrant per 100 generations)
+-   High gene flow: $m = 0.05$ (1 migrant per 20 generations)
+
+This represents varying degrees of spatial structure from nearly isolated populations to high connectivity, reflecting different endemic transmission settings (isolated villages vs. urban transmission hotspots).
+
+## Evolutionary Parameters
+
+### Recombination
+
+Recombination in P. *falciparum* occurs during meiosis following sexual reproduction in the mosquito midgut. The recombination rate per base pair per generation, $r$, determines the extent to which parental genomes are reshuffled during outcrossing events.
+
+We systematically varied $r$ across four orders of magnitude:
+
+-   Very low: $r = 10^{-9}$ bp$^{-1}$ gen$^{-1}$ (effectively clonal)
+-   Low: $r = 10^{-8}$ bp$^{-1}$ gen$^{-1}$ (rare recombination)
+-   Medium: $r = 10^{-7}$ bp$^{-1}$ gen$^{-1}$ (moderate recombination)
+-   High: $r = 10^{-6}$ bp$^{-1}$ gen$^{-1}$ (frequent recombination)
+
+For a chromosome of length $L = 640,851$ bp (chromosome 1), the genome-wide recombination rate is $R = 4N_e r L$, ranging from effectively no recombination ($R \approx 0.03$ for $r = 10^{-9}$) to free recombination ($R \approx 26$ for $r = 10^{-6}$).
+
+### Mutation
+
+Two mutation processes were modeled as follow:
+
+**Neutral mutations**: Added post-simulation using msprime with rate $\mu = 10^{-8}$ bp$^{-1}$ gen$^{-1}$, consistent with empirical estimates for P. *falciparum* (Hamilton et al., 2017). These mutations accumulate according to the infinite-sites model and provide genomic variation for IBD/IBS inference.
+
+**Selected mutations**: To model adaptive evolution (drug resistance), we introduced a single beneficial allele at position $\ell_s = L/3$ with: - Selection coefficient: $s = 0.3$ (30% fitness advantage) - Dominance coefficient: $h = 0.5$ (codominant, though relevant only during transient diploid stage) - Introduction time: $g_s = 80$ generations before present
+
+The selected allele was introduced into $n_{\text{origins}} = 1$ random genome and tracked until fixation or loss. Simulations where the beneficial allele was lost were automatically restarted (maximum 100 restarts) to condition on successful selective sweeps, allowing us to evaluate transmission inference in the presence of recent positive selection.
+
+### Expected Substitutions per Transmission (EST)
+
+A key parameter linking mutation rate to transmission dynamics is the expected number of mutations accumulated per transmission event. For a genome of length $L$ transmitted over $g_{\text{trans}}$ generations with mutation rate $\mu$:
+
+$$\text{EST} = \mu \times L \times g_{\text{trans}}$$
+
+We explored three EST scenarios:
+
+-   None: EST $= 0$ (mutations added only post-simulation via msprime)
+-   Low: EST $= 0.1$ (rare mutations during transmission)
+-   Moderate: EST $= 0.5$ (detectable mutation accumulation)
+
+For EST $> 0$, we calculated the corresponding per-generation mutation rate as:
+
+$$\mu_{\text{trans}} = \frac{\text{EST}}{L \times g_{\text{trans}}}$$
+
+Using $L = 640,851$ bp and $g_{\text{trans}} = 22$ generations (typical scenario):
+
+$$\mu_{\text{trans}} = \frac{\text{EST}}{640,851 \times 22} = \frac{\text{EST}}{14,098,722} \approx 7.1 \times 10^{-8} \times \text{EST}$$
+
+For EST $= 0.5$: $\mu_{\text{trans}} \approx 3.5 \times 10^{-8}$ bp$^{-1}$ gen$^{-1}$.
+
+## Mathematical Framework
+
+### Wright-Fisher Model with Selection and Migration
+
+Our simulations implement a discrete-generation Wright-Fisher model modified for haploid, selfing, and selection. The probability that genome $i$ in generation $t+1$ descends from genome $j$ in generation $t$ is:
+
+$$P(i_{t+1} \leftarrow j_t) = \frac{w_j}{\bar{w}} \times \left[\sigma + (1-\sigma) \times \frac{1}{N}\right]$$
+
+where $w_j$ is the fitness of genome $j$, $\bar{w} = \frac{1}{N}\sum_{k=1}^N w_k$ is the mean population fitness, $\sigma$ is the selfing rate and $N$ is the population size.
+
+For the multi-population model, migration occurs before reproduction. The probability that genome $i$ in population $p$ at generation $t+1$ descends from population $q$ is $M_{pq}$, and given migration to population $p$, the probability of descending from a specific genome follows the within-population model above.
+
+### Fitness Model
+
+For a genome carrying $n$ copies of the beneficial allele at the selected locus (0 or 1 in haploids):
+
+$$w = \begin{cases}
+1 & \text{if } n = 0 \text{ (wild-type)} \\
+1 + s & \text{if } n = 1 \text{ (mutant)}
+\end{cases}$$
+
+During transient diploidy (sexual stage), heterozygous genotypes have fitness $w = 1 + hs$, but this affects only the single generation of meiosis. The derived allele frequency in generation $t$, $p_t$, evolves deterministically (ignoring drift) as:
+
+$$p_{t+1} = p_t \times \frac{1+s}{1 + s p_t}$$
+
+With drift in a finite population, frequency changes are stochastic, sampled from a binomial distribution:
+
+$$X_{t+1} \sim \text{Binomial}\left(N, p_t \times \frac{1+s}{1 + s p_t}\right)$$
+
+where $X_t$ is the count of derived alleles.
+
+### Transmission Bottleneck Model
+
+Each transmission event samples $B$ parasite genomes from the donor's infection. For a donor with derived allele frequency $p_{\text{donor}}$, the probability that the recipient infection has $k$ copies of the derived allele is:
+
+$$P(k \mid p_{\text{donor}}, B) = \binom{B}{k} p_{\text{donor}}^k (1-p_{\text{donor}})^{B-k}$$
+
+For tight bottlenecks ($B=1$), transmission is deterministic: \\
+
+$P(k=1) = p_{\text{donor}}$, $P(k=0) = 1-p_{\text{donor}}$
+
+This bottleneck severely constrains the genetic diversity transmitted and creates strong stochasticity in allele frequency trajectories.
+
+### Coalescent Theory and Tree Sequences
+
+The genealogical relationships among sampled parasites are recorded as tree sequences (Kelleher et al., 2018), encoding the full ancestral recombination graph (ARG). For neutral loci in a panmictic population of size $N_e$, the distribution of pairwise coalescence times $T$ follows:
+
+$$P(T > t) = e^{-t/(2N_e)}$$
+
+with mean coalescence time $\mathbb{E}[T] = 2N_e$ generations.
+
+Under the sequentially Markovian coalescent (SMC) approximation, genealogies at different genomic positions are correlated, with the correlation decaying as a function of recombination distance $d$:
+
+$$\rho(d) = e^{-\rho d}$$
+
+where $\rho = 4N_e r$ is the population-scaled recombination rate.
+
+Tree sequences enable efficient computation of true **Identity by descent (IBD)** metric, which is the genomic segments sharing a common ancestor within $T_{\text{IBD}}$ generations.
+
+## Evaluation
+
+Because direct transmission events constitute a small fraction of all possible host pairs, we evaluate inference performance such as IBD, IBS and phylogenetic patristic distances using precision–recall curves and the area under the precision–recall curve (AUPRC), which is more informative than ROC-based metrics under class imbalance. Performance metrics were computed independently for each simulation replicate. For each recombination rate, results were summarized across replicates using the mean and interquartile range. Trends across recombination regimes were assessed using log-scaled recombination rates.
+
+## Simulation Workflow
+
+### Stage 1: Forward Simulation with SLiM
+
+We used SLiM 4.0 to simulate $G = 200$ generations of forward-time evolution with the following workflow:
+
+**Initialization** (generation 1):
+
+-   Create single population $p_1$ with $N = 10,000$ haploid individuals
+-   Initialize chromosome length $L = 640,851$ bp (chromosome 1)
+-   Set recombination rate $r$
+-   Enable tree sequence recording with pedigree tracking
+-   Define neutral mutation type $m_1$ and selected mutation type $m_2$
+
+**Population size dynamics** (generations 1 to $200 - g_{\text{change}}$): - Implement exponential growth/decline according to $N(t)$ equation - For generation $t$:
+
+$$N_t = N_0 \left(\frac{N_e}{N_0}\right)^{(200-t)/g_{\text{change}}}$$
+
+**Selection initiation** (generation $200 - g_s - 1 = 119$): - Save simulation state as checkpoint - Introduce beneficial mutation at position $\ell_s$ in $n_{\text{origins}}$ random genomes - Track derived allele frequency (DAF) each generation
+
+**Conditioning on establishment** (generations $119$ to $200$): - Monitor derived allele frequency $p_t$ each generation - If $p_t = 0$ (loss) and restart count $< 100$: - Reload checkpoint state - Re-introduce mutation with new random seed - Increment restart counter - If $p_t = 1$ (fixation): - End tracking (mutation has fixed) - Continue until generation $200$
+
+**High relatedness simulation** (optional, final 50 generations): - If `sim_relatedness = 1`, activate `modifyChild()` callback - Filter mating pairs to prefer relatedness $1/32 < r_{ij} < 1/4$ - This enriches for specific relationship classes (half-siblings, cousins) - Used to evaluate IBD methods on known pedigree relationships
+
+**Output**: - Tree sequence file (`.trees`) with complete genealogical history - Derived allele frequency trajectory - True effective population size ($N_e$) trajectory - Restart count (number of failed establishment attempts)
+
+### Stage 2: Sampling and Simplification
+
+From the final generation ($t = 200$), we sampled individuals to represent genomic surveillance:
+
+**Sample selection**: - Identify all individuals alive at $t = 0$ (present day): $\mathcal{I}_{\text{alive}}$ - Randomly sample $n_{\text{sample}}/2$ individuals from $\mathcal{I}_{\text{alive}}$ - Division by 2 because each haploid individual has 2 nodes in tree sequence representation - Extract node IDs for sampled individuals - For multi-population simulations, sample proportionally from each deme.
+
+We varied sampling intensity from Low: 5% of outbreak ($n_{\text{sample}}/N_{\text{outbreak}} = 0.05$), Medium: 10-20% of outbreak and High: 30% of outbreak (approaching exhaustive sampling).
+
+**Tree sequence simplification**: We Reduce tree sequence to sampled lineages: $\texttt{ts.simplify}(\text{sample\_nodes})$, remove non-ancestral branches (grafting lineages that don't coalesce to samples) and retain input roots to preserve pre-simulation history. This reduces file size and computational burden for downstream analyses
+
+### Stage 3: Recapitation and Mutation Addition
+
+Forward simulation in SLiM captures recent evolutionary dynamics but does not extend to complete coalescence (infinite time). We used msprime to "recapitate" the tree sequence, adding ancient genealogical history. This extends all uncoalesced lineages backward in time under a neutral Wright-Fisher model until complete coalescence, ensuring every genomic position has a most recent common ancestor (MRCA). After recapitation, we removed all SLiM-generated mutations (which were used only for selection tracking) and added neutral mutations uniformly across the genome. Mutations are placed on tree branches according to a Poisson process with rate $\mu$, generating realistic patterns of standing variation and derived polymorphisms. This allowed us to generate a recapitated tree sequence, mutated tree sequence with final variant set and VCF file with pseudo-homozygous genotypes used for the downstream analyses.
+
+## Parameter Space Exploration
+
+We simulated three nested experimental designs:
+
+### Scenario 1: Baseline (Fixed Parameters)
+
+Single replicate with P. *falciparum* typical parameters: - $N_e = 10,000$, $N_0 = 1,000$ - $r = 6.67 \times 10^{-7}$ bp$^{-1}$ gen$^{-1}$ (intermediate recombination) - $\mu = 10^{-8}$ bp$^{-1}$ gen$^{-1}$ - $B = 5$ (moderate bottleneck) - $\sigma = 0.95$ (high selfing) - $s = 0.3$, $g_s = 80$ - $n_{\text{sample}} = 100$ - Single population (no migration)
+
+**Purpose**: Establish baseline accuracy of IBD/IBS/phylogenetic patristic methods under realistic conditions.
+
+### Scenario 2: Recombination Sweep
+
+Systematic variation of recombination rate while holding other parameters constant: - $r \in \{10^{-9}, 10^{-8}, 10^{-7}, 10^{-6}\}$ bp$^{-1}$ gen$^{-1}$ - All other parameters as in Scenario 1 - 10 replicates per recombination rate - Total: $4 \times 10 = 40$ simulations
+
+**Purpose**: Isolate the effect of recombination on transmission inference accuracy.
+
+### Scenario 3: Full Parameter Space
+
+Factorial design crossing:
+
+-   **Recombination rate**: $r \in \{10^{-9}, 10^{-8}, 10^{-7}, 10^{-6}\}$ (4 levels)
+-   **Bottleneck size**: $B \in \{1, 5, 20\}$ (3 levels)
+-   **Expected substitutions/transmission**: EST $\in \{0, 0.1, 0.5\}$ (3 levels)
+-   **Sampling proportion**: $f \in \{0.05, 0.10, 0.20\}$ (3 levels)
+-   **Outbreak size**: $N_{\text{outbreak}} = 2000$ (fixed)
+-   **Number of populations**: $n_{\text{pop}} = 3$ (fixed)
+-   **Migration rate**: $m \in \{0.001, 0.01, 0.05\}$ (3 levels)
+
+Core biological scenarios: $4 \times 3 \times 3 = 36$ combinations With sampling/migration variation: $36 \times 3 \times 3 = 324$ combinations With 20 replicates: $324 \times 20 = 6,480$ total simulations.
+
+**Purpose**: Comprehensively map the parameter space where genomic methods can accurately infer transmission, identifying critical thresholds and interaction effects.
+
+## Output and Data Availability
+
+For each simulation, we generated:
+
+**Primary outputs**: - Tree sequence files (`.trees`): Complete ARG with metadata - VCF files (`.vcf.gz`): Biallelic SNPs with phased haploid genotypes - Ground truth transmission network: Known donor-recipient pairs from pedigree - Parameter files (`.json`): Complete simulation metadata
+
+**Diagnostic outputs**: - SLiM stdout logs (restart counts, population size trajectories) - Recapitation success metrics - Mutation count summaries
+
+## Empirical dataset for distributional consistency validation
+
+To assess whether the simulated performance bounds are consistent with empirical P. *falciparum* genomic data, we applied the three inference methods to whole-genome sequence data from 160 P. *falciparum* isolates collected i 2014 from ten villages in The Gambia (MRC Unit The Gambia at LSHTM, 2014–2015; Table SX). Samples were collected from households enrolled in a longitudinal malaria surveillance programme. Household membership (HHCode, VillageCode) and visit date were used to define epidemiological proximity. Because confirmed transmission ground truth is unavailable in this observational dataset, same-household pairs sampled within the same transmission season were used as a proxy for transmission-linked pairs, following the approach of Daniels et al. (2015) and Taylor et al. (2017). IBD inference was restricted to monoclonal infections (COIL = 1; n = 152) to satisfy hmmIBD input assumptions. All three methods were applied using the same pipeline as the simulation analyses, and AUPRC was computed using household proximity as the outcome label.
+
+All simulation codes, parameter files, and analysis scripts are available at [GitHub repository URL]. Simulated datasets are archived at [data repository DOI].
+
+\newpage
+
+# References {.unnumbered}
+
+::: {#refs}
+:::
+
+Haller BC, Messer PW. 2023. SLiM 4: Multispecies eco-evolutionary modeling. *American Naturalist* 201(5):E127-E139.
+
+Kelleher J, Etheridge AM, McVean G. 2016. Efficient coalescent simulation and genealogical analysis for large sample sizes. *PLoS Computational Biology* 12(5):e1004842.
+
+Hamilton WL, et al. 2017. Evolution and expansion of multidrug-resistant malaria in southeast Asia: a genomic epidemiology study. *Lancet Infectious Diseases* 17(5):491-497.
+
+Daniels R, et al. 2015. Modeling malaria genomics reveals transmission decline and rebound in Senegal. *PNAS* 112(22):7067-7072.
+
+Schneider KA, et al. 2018. Virulence, drug sensitivity and transmission success in the rodent malaria, Plasmodium *chabaudi*. Proceedings of the Royal Society B 285:20181391.
+
+\newpage
+
+### Supplementary Information
+
+### Acknowledgements
+
+### Author contributions
+
+### Funding
+
+### Data availability
+
+### Ethics approval and consent to participate
+
+### Competing interests
+
+The authors declare no competing interests
+

@@ -1,0 +1,11 @@
+name: slim-msprime
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pyslim
+  - tskit
+  - msprime
+  - numpy
+  - pandas
+  - pip

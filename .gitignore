@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+*.Rout
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Large simulation data (too large for GitHub)
+simulations/multiple_runs/metrics/
+simulations/multiple_runs/evaluation_multi_chrom/
+simulations/multiple_runs/genomic_evaluation/
+simulations/multiple_runs/recombination_evaluation/
+simulations/single_run/inferred/
+simulations/single_run/phylo_output/
+simulations/single_run/evaluation_results/
+simulations/malaria_transmission_study/evaluation/
+
+# Binary R data files (regeneratable from scripts)
+*.rds
+*.RData
+
+# Large VCF/tree files
+*.vcf
+*.vcf.gz
+*.trees
+*.tsv.gz
+
+# Zip archives (use git LFS or external storage)
+*.zip
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.synctex.gz

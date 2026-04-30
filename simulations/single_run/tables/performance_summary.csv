@@ -1,0 +1,8 @@
+IBD.Metric,IBD.Value,IBS.Metric,IBS.Value,Patristic_distance.Metric,Patristic_distance.Value
+Accuracy,0.73,Accuracy,0.727,Accuracy,0.697
+Macro_Precision,0.665,Macro_Precision,0.642,Macro_Precision,0.512
+Macro_Recall,0.705,Macro_Recall,0.659,Macro_Recall,0.508
+Macro_F1,0.674,Macro_F1,0.648,Macro_F1,0.499
+Weighted_Precision,0.774,Weighted_Precision,0.745,Weighted_Precision,0.642
+Weighted_Recall,0.73,Weighted_Recall,0.727,Weighted_Recall,0.697
+Weighted_F1,0.744,Weighted_F1,0.734,Weighted_F1,0.663

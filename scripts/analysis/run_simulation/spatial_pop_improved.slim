@@ -1,0 +1,82 @@
+// spatial_pop_improved.slim
+initialize() {
+    initializeSLiMModelType("nonWF");
+    initializeSLiMOptions(dimensionality="xy", keepPedigrees=T);
+    initializeTreeSeq();
+    initializeMutationRate(0.0);
+    initializeMutationType("m1", 0.5, "f", 0.0);
+    initializeGenomicElementType("g1", m1, 1.0);
+    initializeGenomicElement(g1, 0, 1e8-1);
+    // recombination default; you can override via -d r=<value>
+    initializeRecombinationRate(r);
+
+    // spatial constants (defaults can be overridden via -d)
+    defineConstant("LAMBDA", 2.0); // birth rate
+    defineConstant("K", 1);        // carrying capacity per unit area
+    defineConstant("W", 35);       // width/height
+    defineConstant("MU", 0.5);     // death rate
+    defineConstant("SIGMA", 1.0);  // dispersal / interaction distance
+
+    initializeInteractionType("i1", "xy", reciprocal = T, maxDistance = 3 * SIGMA);
+    i1.setInteractionFunction("n", 1.0/(2*PI*SIGMA^2), SIGMA);
+
+    // Additional control params
+    setSeed(12345);
+    defineConstant("OUTID", 1);
+    defineConstant("REMEMBER_T_GEN", 1000);   // generation to remember ancestral individuals (ago)
+    defineConstant("TOTAL_GEN", 2000);        // total forward generations
+    defineGlobal("trans_id_counter", 1);
+}
+
+reproduction() {
+    neighbor_density = i1.localPopulationDensity(individual);
+    num_offspring = rpois(1, LAMBDA / (1 + neighbor_density / K));
+    mate = i1.drawByStrength(individual, 1);
+    if (size(mate) > 0) {
+        for (k in seqLen(num_offspring)) {
+            offspring = p1.addCrossed(individual, mate);
+            pos = individual.spatialPosition + rnorm(2, 0, SIGMA);
+            offspring.setSpatialPosition(p1.pointReflected(pos));
+            // Optional: log pedigree for each birth (fast-ish; comment if too verbose)
+            //catn(c("PEDIGREE", community.tick, individual, mate, offspring), sep="\t");
+        }
+    }
+}
+
+1 early() {
+    sim.addSubpop("p1", K * W * W);
+    p1.setSpatialBounds(c(0.0, 0.0, W, W));
+    for (ind in p1.individuals) ind.setSpatialPosition(p1.pointUniform());
+}
+
+early() {
+    p1.fitnessScaling = 1 - MU;
+}
+
+late() {
+    i1.evaluate(sim.subpopulations);
+}
+
+// Remember individuals at generation TOTAL_GEN - REMEMBER_T_GEN (i.e. record 'ancient' cohort)
+(TOTAL_GEN - REMEMBER_T_GEN) late() {
+    sim.treeSeqRememberIndividuals(p1.individuals);
+}
+
+// Finalize: write final trees and emit sample map of alive individuals
+TOTAL_GEN late() {
+    // write final trees
+    sim.treeSeqOutput(paste("spatial_sim_out_", OUTID, ".trees", sep=""));
+    // emit sample map lines with individual id and node ids and locations (so wrapper can parse)
+    inds = p1.individuals;
+    for (ind in inds) {
+        // each individual has two genomes/nodes (diploid)
+        //nodes = ind.genomes;
+        loc = ind.spatialPosition;
+        // SAMPLE_MAP <generation> <individualID> <nodeA> <nodeB> <x> <y>
+        if (sim.cycle < slim_total_generations)
+		    catn(c('True_Ne', slim_total_generations - sim.cycle - 1, p1.individualCount), sep='\t');
+            catn(c("SAMPLE_MAP", slim_total_generations - sim.cycle, ind.id, nodes[0].node, nodes[1].node, loc[0], loc[1]), sep="\t");
+    }
+    catn(c("Done."), sep="\t");
+    sim.simulationFinished();
+}

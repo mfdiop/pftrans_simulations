@@ -1,0 +1,232 @@
+// Multi-population malaria transmission model with migration
+// Based on single_pop.slim with added migration and per-population tracking
+// Maintains: DAF tracking, Ne dynamics, selection restarts, relatedness simulation
+
+function (NULL) set_default(string k, lifs v) {
+	if(!exists(k)) defineConstant(k, v);
+	catn(c("Parameter", k, v), sep='\t');
+	return NULL;
+}
+
+initialize()
+{
+	// Genome parameters
+	set_default("L", 750000); // chromosome length in bp
+	set_default("selpos", asInteger(L / 3)); // selection position in bp
+	set_default("num_origins", 1); // how many genomes contain selected mutation
+	
+	// Population parameters
+	set_default("N", 10000); // ancient effective population size PER DEME
+	set_default("N0", 1000); // effective population size at sampling time PER DEME
+	set_default("n_pops", 3); // number of populations/demes
+	set_default("mig_rate", 0.01); // migration rate between populations
+	
+	// Selection parameters
+	set_default("h", 0.5);  // dominance coefficient
+	set_default("s", 0.3); // selection coefficient
+	set_default("g_sel_start", 80); // time of selected mutation introduced (generations ago)
+	
+	// Recombination and relatedness
+	set_default("r", 6.67e-7); // recombination rate
+	set_default("sim_relatedness", F); // whether to simulate high relatedness
+	
+	// Timing parameters
+	set_default("g_ne_change_start", 200); // Ne change time (generations ago)
+	set_default("slim_total_generations", // total simulation time (forward)
+		max(g_sel_start, g_ne_change_start + 1));
+	
+	// Output parameters
+	set_default("outid", 1); // output identifier
+	set_default("max_restart", 100); // max number of restarts if selection lost
+	set_default("outdir", "."); // output directory
+	set_default("scenario_id", "test"); // scenario identifier
+
+	initializeSLiMOptions(keepPedigrees=T);
+	initializeTreeSeq();
+	initializeMutationRate(0.0);
+	initializeMutationType("m1", 0.5, "f", 0.0); // neutral
+	initializeMutationType("m2", h, "f", s); // selected
+	initializeGenomicElementType("g1", m1, 1);
+	initializeGenomicElement(g1, 0, L - 1);
+	initializeRecombinationRate(r);
+
+	// Global variables
+	defineGlobal("restart_counter", 1);
+}
+
+// Trick: only run modifyChild in the last twenty generations so it's much faster
+// This implements relatedness-based mating for simulating inbreeding
+s0:10 modifyChild()
+{
+	if (!sim_relatedness)
+		return T; // normal simulation or old generations, always return T
+
+	// use this to let 50% of candidates pass without checking pedigree relatedness
+	// so the Ne estimates are more stable
+	if (child.index % 2 == 0)
+		return T;
+	
+	prob = parent1.relatedness(parent2);
+	if ((prob > 1.0 / 32) & (prob < 1.0 / 4))
+		return T;
+
+	// for unrelated samples return True with a small probability
+	else
+		return sample(c(T, F), size=1, replace=T, weights=c(1, 999));
+}
+
+1 early()
+{
+	// Create multiple populations
+	for (pop_id in 1:n_pops) {
+		sim.addSubpop(pop_id, N);
+	}
+	
+	// Set up migration matrix if multiple populations
+	if (n_pops > 1) {
+		for (i in 1:n_pops) {
+			for (j in 1:n_pops) {
+				if (i != j) {
+					// Symmetric migration between all populations
+					sim.subpopulations[i-1].setMigrationRates(j, mig_rate);
+				}
+			}
+		}
+		catn(c("Migration", "Initialized symmetric migration rate:", mig_rate), sep='\t');
+	}
+	
+	// Schedule script blocks
+	community.rescheduleScriptBlock(s0, slim_total_generations - 40 + 1);
+	community.rescheduleScriptBlock(s1, slim_total_generations - g_ne_change_start + 1);
+	community.rescheduleScriptBlock(s2, slim_total_generations - g_sel_start - 1, slim_total_generations);
+	community.rescheduleScriptBlock(s3, slim_total_generations + 1, slim_total_generations + 1);
+	
+	catn(c("Info", "Total generations:", slim_total_generations), sep='\t');
+	catn(c("Info", "Number of populations:", n_pops), sep='\t');
+	catn(c("Info", "Initial Ne per population:", N), sep='\t');
+}
+
+// Control population size dynamics for each population
+s1 300: early()
+{
+	t = slim_total_generations - sim.cycle; // generations ago
+	Nt = (N / N0)^(t / g_ne_change_start) * N0; // calculate Nt
+	
+	// Apply Ne change to all populations
+	for (pop in sim.subpopulations) {
+		pop.setSubpopulationSize(asInteger(Nt));
+	}
+}
+
+// Condition on selection establishment (not lost)
+// Introduce selected mutation in ONE population initially
+s2 450: late()
+{
+	if (sim.cycle == slim_total_generations - g_sel_start - 1 & s != 0.0)
+	{
+		// Save state before introducing selection
+		state_file = paste(c(outdir, "/tmp_slim_state_", scenario_id, "_", outid, ".trees"), sep='');
+		sim.treeSeqOutput(state_file);
+		catn(c('saved_state:', state_file), sep='\t');
+		
+		// Introduce selected mutation in first population only
+		target_pop = sim.subpopulations[0];
+		sample(target_pop.genomes, num_origins).addNewDrawnMutation(m2, selpos);
+		catn(c("Selection", "Introduced mutation in population", target_pop.id), sep='\t');
+	}
+	else if (sim.cycle >= slim_total_generations - g_sel_start & s != 0)
+	{
+		mut = sim.mutationsOfType(m2);
+		fixed = sum(sim.substitutions.mutationType == m2);
+		
+		if (fixed)
+		{
+			catn(c("Selection", "Mutation fixed globally"), sep='\t');
+			catn(c("DAF_global", slim_total_generations - sim.cycle, 1.0), sep='\t');
+			community.deregisterScriptBlock(self);
+		}
+		else if ((mut.size() != 1) & restart_counter < max_restart)
+		{
+			// Selected mutation lost, restart
+			catn(c("Selection", "Mutation lost; restarting... (attempt", restart_counter, ")"), sep='\t');
+			state_file = paste(c(outdir, "/tmp_slim_state_", scenario_id, "_", outid, ".trees"), sep='');
+			sim.readFromPopulationFile(state_file);
+			setSeed(rdunif(1, 0, asInteger(2^62 - 1)));
+			
+			target_pop = sim.subpopulations[0];
+			sample(target_pop.genomes, num_origins).addNewDrawnMutation(m2, selpos);
+			restart_counter = restart_counter + 1;
+		}
+		else
+		{
+			// Track DAF globally and per population
+			global_freq = sim.mutationFrequencies(NULL, mut);
+			catn(c("DAF_global", slim_total_generations - sim.cycle, global_freq), sep='\t');
+			
+			// Track per-population frequencies
+			for (pop in sim.subpopulations) {
+				pop_freq = sim.mutationFrequencies(pop, mut);
+				catn(c("DAF_pop" + pop.id, slim_total_generations - sim.cycle, pop_freq), sep='\t');
+			}
+		}
+	}
+}
+
+// Finish simulation and save tree sequence
+s3 500 late()
+{
+	catn(c("restart_counter", restart_counter), sep='\t');
+	
+	// Save final tree sequence
+	trees_file = paste(c(outdir, "/slim_output_", scenario_id, "_", outid, ".trees"), sep='');
+	sim.treeSeqOutput(trees_file);
+	catn(c("Output", "Saved tree sequence:", trees_file), sep='\t');
+	
+	// Print final population sizes
+	catn(c("Info", "Final population sizes:"), sep='\t');
+	for (pop in sim.subpopulations) {
+		catn(c("  Pop" + pop.id, pop.individualCount), sep='\t');
+	}
+	
+	sim.simulationFinished();
+}
+
+// Track true Ne for each population every generation
+late()
+{
+	if (sim.cycle < slim_total_generations)
+	{
+		t_ago = slim_total_generations - sim.cycle - 1; // generations ago
+		
+		// Track Ne for each population
+		for (pop in sim.subpopulations) {
+			catn(c('True_Ne_pop' + pop.id, t_ago, pop.individualCount), sep='\t');
+		}
+		
+		// Track total across all populations
+		total_individuals = sum(sim.subpopulations.individualCount);
+		catn(c('True_Ne_total', t_ago, total_individuals), sep='\t');
+	}
+}
+
+// Periodic status updates every 100 generations
+100:999999 late()
+{
+	if (sim.cycle % 100 == 0) {
+		catn(c("Progress", "Generation", sim.cycle, "/", slim_total_generations), sep='\t');
+		
+		// Print population sizes
+		for (pop in sim.subpopulations) {
+			catn(c("  Pop" + pop.id + ":", pop.individualCount, "individuals"), sep='\t');
+		}
+		
+		// If selection is active, print frequencies
+		if (s != 0.0 & sim.cycle >= slim_total_generations - g_sel_start) {
+			mut = sim.mutationsOfType(m2);
+			if (mut.size() > 0) {
+				global_freq = sim.mutationFrequencies(NULL, mut);
+				catn(c("  Selected mutation frequency:", global_freq), sep='\t');
+			}
+		}
+	}
+}

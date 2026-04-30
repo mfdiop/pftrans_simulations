@@ -1,0 +1,77 @@
+
+// SLiM 4 single-pop script used by the R wrapper
+// Emits True_Ne/DAF each generation and writes a trees file at a fixed time.
+
+initialize() {
+    // Order matters in SLiM 4: options first
+    initializeSLiMOptions(keepPedigrees=T);
+    initializeTreeSeq();
+    initializeMutationRate(0.0);   // msprime adds muts later
+
+    // Genome, DFEs, recombination
+    if (!exists("L"))        defineConstant("L", 1500000);
+    if (!exists("selpos"))   defineConstant("selpos", asInteger(0.33 * 1500000));
+    if (!exists("num_origins")) defineConstant("num_origins", 1);
+    if (!exists("N"))        defineConstant("N", 10000);
+    if (!exists("h"))        defineConstant("h", 0.5);
+    if (!exists("s"))        defineConstant("s", 0.3);
+    if (!exists("g_sel_start")) defineConstant("g_sel_start", 80);
+    if (!exists("r"))        defineConstant("r", 0.01/15000.0);
+    if (!exists("outid"))    defineConstant("outid", 1);
+    if (!exists("max_restart")) defineConstant("max_restart", 0);
+    if (!exists("sim_relatedness")) defineConstant("sim_relatedness", 0);
+    if (!exists("N0"))       defineConstant("N0", 1000);
+    if (!exists("g_ne_change_start")) defineConstant("g_ne_change_start", 200);
+
+    initializeMutationType("m1", 0.5, "f", 0.0);       // neutral
+    initializeMutationType("m2", h,   "f", s);         // selected (fixed effect)
+    initializeGenomicElementType("g1", c(m1), c(1.0));
+    initializeGenomicElement(g1, 0, L-1);
+    initializeRecombinationRate(r);
+}
+
+// Create population at tick 1
+1 early() {
+    sim.addSubpop("p1", N0);
+}
+
+// Change Ne at a given generation
+g_ne_change_start early() {
+    p1.setSubpopulationSize(N);
+}
+
+// Introduce selected mutation(s) at selpos
+g_sel_start early() {
+    for (i in seqLen(num_origins)) {
+        inds = p1.individuals;
+    if (size(inds) > 0) {
+        g = sample(c(inds.genomes), 1);
+        g.addNewDrawnMutation(m2, selpos);
+    }
+    }
+}
+
+// Per-generation reporting
+1: late() {
+    // SLiM 4: current generation = community.tick
+    cat("True_Ne\t" + community.tick + "\t" + p1.individualCount + "\n");
+
+    muts = sim.mutationsOfType(m2);
+    muts = muts[muts.position == selpos];
+    if (size(muts) > 0) {
+        mut = muts[0];
+        carriers = sum(p1.genomes.containsMutations(mut));  // haploid genome count
+        daf = carriers / (2.0 * p1.individualCount);
+        cat("DAF\t" + community.tick + "\t" + daf + "\n");
+    } else {
+        cat("DAF\t" + community.tick + "\t0\n");
+    }
+}
+
+// Output tree sequence at a fixed generation
+(g_sel_start + 500) late() {
+    fn = "tmp_slim_out_single_pop_" + outid + ".trees";
+    SS = sim.simulation;                // Simulation object (SLiM 4)
+    SS.treeSeqOutput(fn);
+    cat("restart_count\t0\n");
+}

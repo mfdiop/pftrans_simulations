@@ -1,0 +1,126 @@
+// SLiM 4 single-pop script for your pipeline
+// - No deprecated APIs
+// - No vectorized property access
+// - No inline 'if' expression
+// - Writes tmp_slim_out_single_pop_<outid>.trees at (g_sel_start + 500)
+
+initialize() {
+    // Required order in SLiM 4
+    initializeSLiMOptions(keepPedigrees=T);
+    initializeTreeSeq();
+    initializeMutationRate(0.0);   // msprime adds muts later
+
+    // Parameters (allow -d overrides)
+    if (!exists("L"))                defineConstant("L", 1500000);
+    if (!exists("selpos"))           defineConstant("selpos", asInteger(0.33 * 1500000));
+    if (!exists("num_origins"))      defineConstant("num_origins", 1);
+    if (!exists("N"))                defineConstant("N", 10000);
+    if (!exists("h"))                defineConstant("h", 0.5);
+    if (!exists("s"))                defineConstant("s", 0.3);
+    if (!exists("g_sel_start"))      defineConstant("g_sel_start", 80);
+    if (!exists("r"))                defineConstant("r", 0.01/15000.0);
+    if (!exists("outid"))            defineConstant("outid", 1);
+    if (!exists("N0"))               defineConstant("N0", 1000);
+    if (!exists("g_ne_change_start"))defineConstant("g_ne_change_start", 200);
+
+    // Genome model
+    initializeMutationType("m1", 0.5, "f", 0.0);       // neutral
+    initializeMutationType("m2", h,   "f", s);         // selected (fixed effect)
+    initializeGenomicElementType("g1", c(m1), c(1.0));
+    initializeGenomicElement(g1, 0, L-1);
+    initializeRecombinationRate(r);
+}
+
+1 early() {
+    sim.addSubpop("p1", N0);
+}
+
+g_ne_change_start early() {
+    p1.setSubpopulationSize(N);
+}
+
+g_sel_start early() {
+    // Add 'num_origins' selected mutations at 'selpos' on random genomes (haploid/diploid safe)
+    for (i in seqLen(num_origins)) {
+        if (p1.individualCount > 0) {
+            idx = rdunif(1, 0, p1.individualCount - 1);
+            ind = p1.individuals[idx];
+            G = ind.genomes;                 // works in SLiM 4 for a single Individual
+            nG = size(G);
+            if (nG == 0) {
+                // nothing to do
+            } else {
+                if (nG == 1) {
+                    g = G[0];
+                } else {
+                    g = sample(G, 1);
+                }
+                g.addNewDrawnMutation(m2, selpos);
+            }
+        }
+    }
+} else {
+                g = ind.genome2;
+            }
+            g.addNewDrawnMutation(m2, selpos);
+        }
+    }
+}
+
+1: late() {
+    // Report effective size proxy and selected-site DAF each generation
+    cat("True_Ne	" + community.tick + "	" + p1.individualCount + "
+");
+
+    mut = NULL;
+    mutsAll = sim.mutationsOfType(m2);
+    for (m in mutsAll) {
+        if (m.position == selpos) { mut = m; break; }
+    }
+    if (!isNULL(mut)) {
+        carriers = 0;
+        inds = p1.individuals;
+        for (ind in inds) {
+            G = ind.genomes;
+            for (g in G) {
+                if (g.containsMutations(mut)) carriers = carriers + 1;
+            }
+        }
+        // determine ploidy from the first individual
+        denom = 0.0;
+        if (p1.individualCount > 0) {
+            denom = size(p1.individuals[0].genomes) * p1.individualCount;
+        }
+        if (denom > 0.0) { daf = carriers / denom; } else { daf = 0.0; }
+        cat("DAF	" + community.tick + "	" + daf + "
+");
+    } else {
+        cat("DAF	" + community.tick + "	0
+");
+    }
+}
+    }
+    if (!isNULL(mut)) {
+        carriers = 0;
+        inds = p1.individuals;
+        for (ind in inds) {
+            if (ind.genome1.containsMutations(mut)) carriers = carriers + 1;
+            if (ind.genome2.containsMutations(mut)) carriers = carriers + 1;
+        }
+        if (p1.individualCount > 0) {
+            daf = carriers / (2.0 * p1.individualCount);
+        } else {
+            daf = 0.0;
+        }
+        cat("DAF\t" + community.tick + "\t" + daf + "\n");
+    } else {
+        cat("DAF\t" + community.tick + "\t0\n");
+    }
+}
+
+// Output tree sequence at a fixed generation
+(g_sel_start + 500) late() {
+    fn = "tmp_slim_out_single_pop_" + outid + ".trees";
+    sim.simulation.treeSeqOutput(fn);
+    cat("restart_count\t0\n");
+}
