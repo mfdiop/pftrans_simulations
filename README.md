@@ -9,7 +9,7 @@ This project benchmarks genomic methods (IBD, IBS, phylogenetics) for inferring 
 ## Project Structure
 
 ```
-simulation/
+pftrans_simulations/
 ├── scripts/
 │   ├── slim/         # SLiM forward-time simulation scripts
 │   ├── pipeline/     # Wrapper scripts for running the full pipeline
@@ -36,7 +36,7 @@ simulation/
 │
 ├── simulation_design.json   # Simulation parameter design
 ├── environment.yml          # Conda environment specification
-└── simulation.Rproj         # RStudio project file
+└── pftrans_simulations.Rproj  # RStudio project file
 ```
 
 ## Simulation Scenarios
