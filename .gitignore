@@ -24,7 +24,7 @@ simulations/single_run/inferred/
 simulations/single_run/phylo_output/
 simulations/single_run/evaluation_results/
 simulations/malaria_transmission_study/evaluation/
-simulations/malaria_transmission_study/migration_prcurves.tsv
+migration_prcurves.tsv
 
 # Binary R data files (regeneratable from scripts)
 *.rds
@@ -43,3 +43,4 @@ simulations/malaria_transmission_study/migration_prcurves.tsv
 *.aux
 *.log
 *.synctex.gz
+*.tsv
