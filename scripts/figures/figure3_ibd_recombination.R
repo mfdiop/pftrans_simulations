@@ -71,10 +71,11 @@ safe_cor <- function(x, y) {
 
 # ======================================================
 # ==================== MAIN ============================
-# root <- "simulations/multiple_runs/inferred"
-root <- "results/multiple_runs/inferred/"
+root <- "simulations/multiple_runs/metrics/inferred"
+# root <- "results/multiple_runs/inferred/"
 scenario_dirs <- list.dirs(root, full.names = TRUE, recursive = TRUE)
-rec_rate <- c(1e-06, 1e-07, 1e-08, 1e-09)
+
+rec_rate <- c(1e-09, 1e-08, 1e-07, 1e-06)
 
 results <- list()
 
@@ -97,7 +98,8 @@ df_ibd <- parsed_dirs %>%
     true_dat = map(path, load_true_ibd, id_cols),
     hmm_dat  = map(path, load_hmm_ibd, id_cols)) %>%
   mutate(
-    merged = map2(true_dat, hmm_dat, ~full_join(.x, .y, by = "pair_key"))) %>%
+    merged = map2(true_dat, hmm_dat, ~full_join(.x, .y, by = "pair_key"))
+  ) %>%
   select(run_id, r_rate, chr, merged) %>%
   unnest(merged)
   
