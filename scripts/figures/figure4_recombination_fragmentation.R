@@ -234,11 +234,11 @@ panelA <- segment_categorized %>%
     x = "IBD segment length (bp, log scale)",
     y = "Density",
     fill = "Ancestry",
-    title = "A) IBD segment length by ancestry and recombination rate"
+    title = "A. " # ) IBD segment length by ancestry and recombination rate
     # subtitle = "Recent transmission maintains longer segments across all rates"
   ) +
   theme(
-    legend.position = "bottom",
+    legend.position = "none",
     legend.title = element_text(size = 12, color = "black", face = "bold"),
     legend.text = element_text(size = 10, color = "black"),
     plot.title = element_text(size = 14, face = "bold"),
@@ -277,10 +277,10 @@ panelB <- segment_summary %>%
   ) +
   theme_bw() +
   labs(
-    x = "Recombination rate (log scale)",
-    y = "Mean segment length (bp, log scale)",
+    x = "Recombination rate ",
+    y = "Mean segment length\n(bp, log scale)",
     color = "Ancestry",
-    title = "B) Recombination fragments OLD ancestry, preserves RECENT"
+    title = "B." #  Recombination fragments OLD ancestry, preserves RECENT
     # subtitle = "This creates temporal stratification that enables discrimination"
   ) +
   theme(
@@ -322,9 +322,9 @@ panelC <- separation_ratio %>%
   ) +
   theme_bw() +
   labs(
-    x = "Recombination rate (log scale)",
+    x = "Recombination rate ",
     y = "Separation ratio\n(Recent / Old mean segment length)",
-    title = "C) Higher recombination creates stronger temporal stratification"
+    title = "C. " # Higher recombination creates stronger temporal stratification
     # subtitle = "Ratio >1 means recent transmission has disproportionately longer segments"
   ) +
   theme(
@@ -366,20 +366,22 @@ panelD <- cv_analysis %>%
   ) +
   theme_bw() +
   labs(
-    x = "Recombination rate (log scale)",
+    x = "Recombination rate ",
     y = "Coefficient of variation",
     color = "Ancestry",
-    title = "D) Variability in segment lengths by ancestry"
+    title = "D." # Variability in segment lengths by ancestry
     # subtitle = "Higher CV at low recombination indicates less consistent signal"
   ) +
   theme(
     legend.position = "right",
-    plot.title = element_text(size = 14, face = "bold"),
+    legend.text     = element_text(size = 10, color = "black"),
+    legend.title     = element_text(size = 10, color = "black", face = "bold", hjust = 0.5),
+    plot.title      = element_text(size = 14, face = "bold"),
     plot.title.position = "plot",
-    axis.title = element_text(size = 12, face = "bold", color = "black"),
-    axis.text = element_text(size = 10, color = "black"),
-    axis.line = element_line(linewidth = 1, colour = 'black', lineend = "square"),
-    axis.ticks = element_line(color = 'black', linewidth = .7),
+    axis.title      = element_text(size = 12, face = "bold", color = "black"),
+    axis.text       = element_text(size = 10, color = "black"),
+    axis.line       = element_line(linewidth = 1, colour = 'black', lineend = "square"),
+    axis.ticks      = element_line(color = 'black', linewidth = .7),
     axis.ticks.length = unit(.22, "cm")
   )
 
@@ -394,8 +396,8 @@ p_mechanism <- (panelA | panelB) / (panelC | panelD)
 print(p_mechanism)
 
 ggsave(
-  "results/figures/main/recombination_mechanism.pdf",
-  p_mechanism, width = 16, height = 12, dpi = 600
+  "results/figures/main/figure4_recombination_mechanism.pdf",
+  p_mechanism, width = 14, height = 10, dpi = 600
 )
 
 cat("\n=== KEY FINDINGS ===\n")
