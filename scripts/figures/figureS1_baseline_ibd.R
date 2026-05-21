@@ -145,5 +145,5 @@ p_hmm <- df_ibd %>%
 figure_baseline_ibd <- p_true / p_hmm +
   plot_annotation(title = "Baseline Scenario: True vs Inferred IBD Distributions")
 
-ggsave("results/figures/supplementary/figure2_baseline_ibd.png", 
+ggsave("results/figures/supplementary/FigS1_baseline_ibd.png", 
        figure_baseline_ibd, , width = 16, height = 10)
