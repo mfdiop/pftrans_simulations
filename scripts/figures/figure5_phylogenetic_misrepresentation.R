@@ -17,8 +17,7 @@ library(phangorn)
 library(pROC)
 library(patchwork)
 
-# Define scenarios
-# scenarios <- c("baseline", "recombination", "migration_fullfactorial")
+scenarios <- "multiple_runs"
 
 # Function to load one replicate
 load_replicate_phylo <- function(scenario, rep_id) {
@@ -59,9 +58,9 @@ load_replicate_phylo <- function(scenario, rep_id) {
 
 load_multiple_phylo <- function(scenario, rep_id) {
   
-  tree_path <- glue::glue("simulations/{scenario}/phylo_results/rep{rep_id}/run{rep_id}_rec1e06_chr1_modelfinder.treefile")
-  true_path <- glue::glue("simulations/{scenario}/inferred/rep{rep_id}/run{rep_id}_rec1e06_chr1/true_ibd_summary.tsv")
-  ibd_path  <- glue::glue("simulations/{scenario}/inferred/rep{rep_id}/run{rep_id}_rec1e06_chr1/inferred_ibd_hmm.tsv")
+  tree_path <- glue::glue("simulations/{scenario}/metrics/phylo_results/rep{rep_id}/run{rep_id}_rec1e06_chr1.treefile")
+  true_path <- glue::glue("simulations/{scenario}/metrics/inferred/rep{rep_id}/run{rep_id}_rec1e06_chr1/true_ibd_summary.tsv")
+  ibd_path  <- glue::glue("simulations/{scenario}/metrics/inferred/rep{rep_id}/run{rep_id}_rec1e06_chr1/inferred_ibd_hmm.tsv")
   
   # Load data
   tree <- read.tree(tree_path)
@@ -94,15 +93,12 @@ load_multiple_phylo <- function(scenario, rep_id) {
 }
 
 
-scenarios <- "single_run"
-# Load all replicates
-df_single <- map_dfr(
-  scenarios,
-  ~ map_dfr(1:5, \(x) load_replicate_phylo(.x, x))
-)
-
-
-scenarios <- "multiple_runs"
+# scenarios <- "single_run"
+# # Load all replicates
+# df_single <- map_dfr(
+#   scenarios,
+#   ~ map_dfr(1:5, \(x) load_replicate_phylo(.x, x))
+# )
 
 df_multiple <- map_dfr(
   scenarios,
@@ -110,43 +106,43 @@ df_multiple <- map_dfr(
 )
 
 
-df_phylo_all <- rbind.data.frame(df_single, df_multiple) %>% 
-  mutate(scenario = recode(scenario, "single_run" = "baseline", "multiple_runs" = "recombination_sweep"),
+df_phylo <- df_multiple %>% # scenarios <- "multiple_runs"
+  mutate(scenario = recode(scenario, "multiple_runs" = "Recombination\nSweep"),
          direct = if_else(min_tmrca<=5, 1, 0),
          transmission_class = case_when(
            min_tmrca == 1 ~ "Direct (1 gen)",
-           min_tmrca <= 2 ~ "Near-direct (≤2 gen)",
-           min_tmrca >= 3 ~ "Non-direct (≥3 gen)"),
-         is_direct = min_tmrca == 1) %>% 
+           min_tmrca <= 5 ~ "Near-direct (≤5 gen)",
+           min_tmrca > 5 ~ "Indirect (>5 gen)"),
+         is_direct = min_tmrca == 1) %>%
   rename(tmrca_true = min_tmrca)
-
-fig5A <- df_phylo_all %>%
-  ggplot(aes(x = tmrca_true, fill = factor(direct))) +
-  geom_density(alpha = 0.6) +
-  facet_wrap(~ scenario,
-             labeller = as_labeller(c(baseline = "Baseline", 
-                                      recombination_sweep = "Recombination\nsweep"))) +
-  scale_fill_manual(values = c("0" = "grey60", "1" = "blue3"),
-                    # values = c("0" = "grey60", "1" = "red3"),
-                    labels = c("Non-direct", "Direct")) +
-  labs(
-    x = "True TMRCA (generations)",
-    y = "Density",
-    fill = "Transmission",
-    # title = "Figure 5A. TMRCA distributions for direct vs non-direct pairs"
-  ) +
-  theme_bw() +
-  theme(
-    axis.title = element_text(size = 18, color = "black", face = "bold"),
-    axis.text = element_text(color = "black", size = 15),
-    legend.text = element_text(size = 14, color = "black", face = "bold"),
-    legend.title = element_text(size = 13, color = "black", face = "bold"),
-    strip.text = element_text(size = 15, face = 'bold'))
-
-ggsave("simulations/main/figure5_tmrca_distribution.png", 
-       plot = fig5A, width = 10, height = 6, dpi = 600)
-
-# fig5A <- df_phylo_all %>%
+ 
+# fig5A <- df_phylo %>%
+#   ggplot(aes(x = tmrca_true, fill = factor(direct))) +
+#   geom_density(alpha = 0.6) +
+#   facet_wrap(~ scenario,
+#              labeller = as_labeller(c(baseline = "Baseline", 
+#                                       recombination_sweep = "Recombination\nsweep"))) +
+#   scale_fill_manual(values = c("0" = "grey60", "1" = "blue3"),
+#                     # values = c("0" = "grey60", "1" = "red3"),
+#                     labels = c("Non-direct", "Direct")) +
+#   labs(
+#     x = "True TMRCA (generations)",
+#     y = "Density",
+#     fill = "Transmission",
+#     # title = "Figure 5A. TMRCA distributions for direct vs non-direct pairs"
+#   ) +
+#   theme_bw() +
+#   theme(
+#     axis.title = element_text(size = 18, color = "black", face = "bold"),
+#     axis.text = element_text(color = "black", size = 15),
+#     legend.text = element_text(size = 14, color = "black", face = "bold"),
+#     legend.title = element_text(size = 13, color = "black", face = "bold"),
+#     strip.text = element_text(size = 15, face = 'bold'))
+# 
+# ggsave("simulations/main/figure5_tmrca_distribution.png", 
+#        plot = fig5A, width = 10, height = 6, dpi = 600)
+#
+# fig5A <- df_phylo %>%
 #   ggplot(aes(x = tmrca_true, fill = factor(transmission_class))) +
 #   geom_density(alpha = 0.4) +
 #   facet_wrap(~ scenario,
@@ -168,19 +164,22 @@ ggsave("simulations/main/figure5_tmrca_distribution.png",
 #     legend.title = element_text(size = 13, color = "black", face = "bold"),
 #     strip.text = element_text(size = 12, face = 'bold'))
 
-
-fig5B <- df_phylo_all %>%
-  ggplot(aes(x = cophenetic_dist, fill = factor(direct))) +
+# ========================================
+#   Visualise distance distribution
+# ========================================
+figure1 <- df_phylo %>%
+  mutate(direct = factor(direct)) %>% # , levels = c("Direct", "Indirect")
+  ggplot(aes(x = cophenetic_dist, fill = direct)) +
   geom_density(alpha = 0.6) +
-  facet_wrap(~ scenario,
-             labeller = as_labeller(c(baseline = "Baseline", 
-                                      recombination_sweep = "Recombination\nsweep"))) +
-  scale_fill_manual(values = c("0" = "grey60", "1" = "blue3"),
-                    labels = c("Non-direct", "Direct")) +
+  # facet_wrap(~ scenario,
+  #            labeller = as_labeller(c(baseline = "Baseline", 
+  #                                     recombination_sweep = "Recombination\nsweep"))) +
+  scale_fill_manual(values = c("0" = "grey40", "1" = "blue3"),
+                    labels = c("Indirect", "Direct")) +
   labs(
     x = "Cophenetic distance",
     y = "Density",
-    fill = "Transmission"
+    fill = "Transmission Class"
     # title = "Figure 5B. Phylogenetic distances for direct vs non-direct pairs"
   ) +
   theme_bw() +
@@ -195,14 +194,11 @@ ggsave("simulations/main/figure5_phylogenetic_distances.png",
        plot = fig5B, width = 10, height = 6, dpi = 600)
 
 
-fig5C <- df_phylo_all %>%
+fig5C <- df_phylo %>%
   ggplot(aes(x = true_ibd_prop, y = cophenetic_dist, color = factor(direct))) +
   geom_point(alpha = 0.6, size = 1) +
-  facet_wrap(~ scenario,
-             labeller = as_labeller(c(baseline = "Baseline", 
-                                      recombination_sweep = "Recombination\nsweep"))) +
   scale_color_manual(values = c("0" = "grey40", "1" = "blue"),
-                     labels = c("Non-direct", "Direct")) +
+                     labels = c("Indirect", "Direct")) +
   labs(
     x = "True IBD fraction",
     y = "Cophenetic distance",
@@ -225,7 +221,7 @@ ggsave("simulations/main/figure5_ibd_phylo.png",
 #   as.numeric(pROC::roc(y, score, quiet = TRUE)$auc)
 # }
 # 
-# df_auc <- df_phylo_all %>%
+# df_auc <- df_phylo %>%
 #   group_by(scenario, replicate) %>%
 #   summarize(
 #     auc = safe_auc(direct, -cophenetic_dist),
@@ -248,7 +244,7 @@ safe_prauc <- function(y, score) {
   pr$auc.integral
 }
 
-df_prauc <- df_phylo_all %>%
+df_prauc <- df_phylo %>%
   group_by(scenario, replicate) %>%
   summarize(
     pr_auc = safe_prauc(direct, -cophenetic_dist),
@@ -301,7 +297,7 @@ ggsave("simulations/main/figure5_phylogenetic_misrepresentation.pdf",
 # 7. SUPPLEMENTARY FIGURE 5E — Misclassification heatmaps
 # =========================================================
 
-supp5E <- df_phylo_all %>%
+supp5E <- df_phylo %>%
   mutate(predicted_direct = cophenetic_dist < median(cophenetic_dist)) %>%
   count(scenario, replicate, direct, predicted_direct) %>%
   ggplot(aes(x = factor(direct), y = factor(predicted_direct), fill = n)) +
