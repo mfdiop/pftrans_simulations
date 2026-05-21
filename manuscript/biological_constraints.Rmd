@@ -1,8 +1,9 @@
 ---
-title: "From Sequence to Source: A Unified Framework for Quantifying the Limits of Genomic Transmission Identifiability in Malaria / Alternative: When Genomes Cannot Identify Transmission: Biological and Surveillance Limits of IBD-Based Inference in Malaria"
+title: |
+    **Can genomic data detect malaria transmission? Biological constraints on inference.**
+    
 author: []
 
-# date: "`r format(Sys.time(), '%B %d, %Y')`"
 date: ""
 
 output:
@@ -10,15 +11,17 @@ output:
   pdf_document:
     keep_tex: yes
     fig_caption: yes
-    latex_engine: pdflatex
-  # html_document:
-  #   df_print: paged
-  
+    latex_engine: xelatex
+    extra_dependencies: xcolor
+    
 fontsize: 11pt
-geometry: margin=1in
 
+geometry: margin=1in
 header-includes:
   - \usepackage{authblk}
+  - \usepackage{helvet}
+  - \usepackage{fontspec}
+  - \setmainfont{Helvetica}
   - \usepackage[left]{lineno}
   - \usepackage{setspace}
   - \doublespacing
@@ -27,41 +30,82 @@ header-includes:
   - \usepackage{caption}
   - \usepackage{float}
   - \usepackage{siunitx}
-  
+  - \usepackage{placeins}
+  - \usepackage{sectsty}
+  - \sectionfont{\bfseries}
+  - \subsectionfont{\bfseries}
+  - \subsubsectionfont{\bfseries}
+  - \usepackage[labelfont=bf]{caption}
+  - \usepackage{xcolor}
+  - \definecolor{captionblue}{HTML}{1F4E79}
+  - \usepackage[labelfont={bf,color=captionblue}]{caption}
+  - \usepackage{soul}
+  - \sethlcolor{yellow}
+  - \usepackage{hyperref}
+  - \hypersetup{
+      colorlinks=false,
+      pdfborder={0 0 0.5},
+      citebordercolor={0.8 0 0},
+      linkbordercolor={0 0 0.8},
+      urlbordercolor={0 0.5 0.8}
+    }
 
+  
+bibliography: references.bib
+link-citations: yes
 editor_options: 
   markdown: 
     wrap: 72
 ---
 
+\vspace{1mm}
+
 ```{=latex}
-\author{Mouhamadou Fadel Diop}$^{1}$
-\author{David Jeffries}$^{2}$
-\author{Alfred Amambua-Ngwa}$^{3}$
+\author{
+Mouhamadou Fadel DIOP$^{1,2}$,
+David Jeffries$^{1}$,
+Nuredin Mohammed$^{1}$,
+Martin Holland$^{4}$,
+Alfred Amambua-Ngwa$^{1,2,3*}$
+}
 
 \noindent
-$^{1}$ Department of Epidemiology and Biostatistics, University X, Country\\
-$^{2}$ Department of Biology, University Y, Country\\
-$^{3}$ Department of Entomology, University Z, Country
-
-
+$^{1}$ MRC Unit The Gambia at London School of Hygiene and Tropical Medicine, Banjul, The Gambia\\
+$^{2}$ London School of Hygiene and Tropical Medicine, London, UK\\
+$^{3}$ Department of Infection Biology, London School of Hygiene and Tropical Medicine, London, UK\\
+$^{4}$ Wellcome Sanger Institute, Hinxton, UK
+ 
+\vspace{5mm}
+*Correspondence: 
+\href{mailto:angwa@mrc.gm}{angwa@mrc.gm}; \href{mailto:alfred.ngwa@lshtm.ac.uk}{alfred.ngwa@lshtm.ac.uk}
 ```
 
-### Corresponding author
+\newpage
+
+# Abstract
+
+**Background.** Genomic surveillance is increasingly deployed to track malaria transmission, yet the conditions under which genomic data can reliably detect transmission links remain poorly defined. For Plasmodium falciparum, the combined effects of high selfing rates, variable recombination, and elevated background genomic relatedness may fundamentally constrain inference—but this constraint has not been systematically quantified across biologically relevant parameter spaces.
+
+**Methods.** We developed a forward-time simulation framework using SLiM, tskit, and msprime to generate full-genome sequence data under three scenario classes: a baseline biological parameterisation, a recombination sweep spanning four orders of magnitude (r = $10^{-9}$ to $10^{-6}$ per base per generation), and a multi-population structure with migration rates of 0.001–0.05. Transmission detectability was evaluated using three inference approaches—IBD (hmmIBD), identity-by-state (IBS), and maximum-likelihood phylogenetic patristic distances (IQ-TREE)—across varying generation thresholds (G = 1–25), sample sizes (n = 100–400), and population sizes. Performance was quantified using area under the precision-recall curve (AUPRC), F1 score, and sensitivity at fixed specificity. Results were validated against an observed P. falciparum dataset using same-household and different-household pairs as a transmission proximity proxy.
+
+**Results.** Transmission detectability was strongly and primarily determined by recombination rate. AUPRC increased from 0.53–0.62 at r = $10^{-9}$ to 0.74–0.82 at r = $10^{-6}$ regardless of migration rate or sample size. IBD-based inference consistently outperformed IBS and phylogenetic approaches, though the absolute advantage was small. The generation threshold G was a critical secondary modulator: at G = 1, no method exceeded AUPRC = 0.50 under any recombination condition. Migration rate exerted minimal independent influence on detectability across the range explored. In observed P. falciparum data, all three methods performed near the random classifier baseline (AUPRC \< 0.05), consistent with near-complete IBD distribution overlap between household-linked and unlinked pairs.
+
+**Conclusions.** Transmission detection from genomic data in P. falciparum is subject to fundamental biological constraints that precede methodological choices. Recombination rate and the temporal depth of the transmission definition are the primary determinants of whether genomic inference can succeed. Current IBD and IBS tools applied to endemic African populations operate in a parameter regime where accurate transmission detection is unlikely without integration of epidemiological and spatial data. These results provide a quantitative framework for calibrating expectations for genomic surveillance programmes and identifying conditions under which genomic data alone is insufficient to resolve transmission connectivity.
+
+**Keywords**: Plasmodium falciparum; malaria genomic epidemiology; IBD; transmission inference; simulation; recombination; identifiability
+
 ```{=latex}
-Mouhamadou Fadel DIOP$^{1}$\thanks{Correspondence: lshmd19@lshtm.ac.uk}
-
-Mouhamadou Fadel Diop$^{1,\dagger}$, David Jeffries$^{2,\dagger}$
-
-\noindent
-$\dagger$ These authors contributed equally.
 
 \date{}
-
 \maketitle
 \linenumbers
-
 ```
+
+
+### Alternative titles: 
+> Recombination defines the biological limits of malaria transmission inference from genomic data.
+
+> Biological constraints on genomic inference of malaria transmission
 
 \newpage
 
