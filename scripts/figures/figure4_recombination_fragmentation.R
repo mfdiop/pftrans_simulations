@@ -436,12 +436,12 @@ stat_test <- segment_categorized %>%
   group_by(r_rate) %>%
   summarize(
     t_statistic = t.test(
-      segment_length[ancestry_category == "Recent (G≤5)"],
-      segment_length[ancestry_category == "Old (G>15)"]
+      total_ibd_bp[ancestry_category == "Recent (G≤5)"],
+      total_ibd_bp[ancestry_category == "Old (G>15)"]
     )$statistic,
     p_value = t.test(
-      segment_length[ancestry_category == "Recent (G≤5)"],
-      segment_length[ancestry_category == "Old (G>15)"]
+      total_ibd_bp[ancestry_category == "Recent (G≤5)"],
+      total_ibd_bp[ancestry_category == "Old (G>15)"]
     )$p.value,
     effect_size = abs(t_statistic) / sqrt(n()),
     .groups = "drop"
@@ -459,9 +459,9 @@ cat(sprintf(
   "\"The recombination paradox mechanism: At low recombination (r=1e-9), 
 mean IBD segment length was %.0f kb for recent transmission pairs (G≤5) 
 versus %.0f kb for old ancestry pairs (G>15), yielding a separation ratio 
-of %.2f (Figure XB). At high recombination (r=1e-6), segment lengths were 
+of %.2f (Figure 4B). At high recombination (r=1e-6), segment lengths were 
 %.0f kb versus %.0f kb, respectively, yielding a ratio of %.2f—a %.1f-fold 
-improvement in temporal stratification (Figure XC). This occurs because 
+improvement in temporal stratification (Figure 4C). This occurs because 
 recombination events accumulate across generations: pairs separated by 
 G=15 generations experience 3× more recombination events than G=5 pairs. 
 Consequently, high recombination preferentially fragments background IBD 
